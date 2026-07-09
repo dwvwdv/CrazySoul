@@ -1,0 +1,179 @@
+/* lazyrhythm-design 基礎版:Nord × Brutalism。
+   冷色調背景、偏移硬陰影卡片、frost 藍系強調色。
+   場景:Dashboard,STRUCTURE 6 / MOTION 3(結構感重、動態中等)。 */
+
+:root {
+  /* Nord Polar Night */
+  --nord0: #2e3440;
+  --nord1: #3b4252;
+  --nord2: #434c5e;
+  --nord3: #4c566a;
+  /* Nord Snow Storm */
+  --nord4: #d8dee9;
+  --nord5: #e5e9f0;
+  --nord6: #eceff4;
+  /* Nord Frost */
+  --frost1: #8fbcbb;
+  --frost2: #88c0d0;
+  --frost3: #81a1c1;
+  --frost4: #5e81ac;
+  /* Aurora */
+  --red: #bf616a;
+  --yellow: #ebcb8b;
+  --green: #a3be8c;
+
+  --shadow: 6px 6px 0 var(--nord0);
+  --border: 2px solid var(--nord3);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--nord0);
+  color: var(--nord4);
+  font-family: "Inter", "Noto Sans TC", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.hidden { display: none !important; }
+
+header.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 18px 28px;
+  background: var(--nord1);
+  border-bottom: 3px solid var(--frost4);
+}
+header.topbar h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--nord6);
+}
+header.topbar .tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border: var(--border);
+  color: var(--frost2);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+header.topbar .spacer { flex: 1; }
+
+main { max-width: 1000px; margin: 0 auto; padding: 28px; }
+
+.card {
+  background: var(--nord1);
+  border: var(--border);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.card h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--nord6);
+}
+.card .muted { color: var(--nord3); font-size: 13px; }
+
+label { display: block; font-size: 13px; margin: 12px 0 4px; color: var(--nord5); }
+
+input[type="text"], input[type="password"], input[type="number"], textarea {
+  width: 100%;
+  background: var(--nord0);
+  color: var(--nord6);
+  border: var(--border);
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+}
+input[type="number"] { width: 80px; }
+textarea { min-height: 64px; resize: vertical; }
+
+button {
+  background: var(--frost4);
+  color: var(--nord6);
+  border: 2px solid var(--nord6);
+  box-shadow: 4px 4px 0 var(--nord0);
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+button:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--nord0); }
+button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--nord0); }
+button.secondary { background: var(--nord2); }
+button.ghost { background: transparent; border-color: var(--nord3); box-shadow: none; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+
+/* 分鏡卡片 */
+.shot { border-left: 4px solid var(--frost3); padding-left: 16px; margin-bottom: 20px; }
+.shot .shot-head { display: flex; gap: 10px; align-items: baseline; }
+.shot .idx {
+  font-size: 12px; padding: 1px 8px; border: 1px solid var(--frost3);
+  color: var(--frost2); letter-spacing: 1px;
+}
+.shot .desc { color: var(--nord5); }
+.shot .stage {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--yellow); margin-left: auto;
+}
+.shot .stage.done { color: var(--green); }
+
+/* 縮圖牆:批量生成 n 個候選,選中用 frost1 邊框 */
+.wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.cand {
+  border: 2px solid var(--nord3);
+  background: var(--nord0);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  transition: transform 120ms ease;
+}
+.cand img, .cand video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cand:hover { transform: translateY(-3px); }
+.cand.selected { border-color: var(--frost1); box-shadow: 0 0 0 3px var(--frost1) inset; }
+.cand .pick-hint {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  font-size: 11px; text-align: center; padding: 3px;
+  background: rgba(46, 52, 64, 0.8); color: var(--nord5);
+}
+.cand.selected .pick-hint { background: var(--frost1); color: var(--nord0); font-weight: 700; }
+
+.status-line { font-size: 13px; color: var(--frost2); min-height: 18px; }
+.error { color: var(--red); }
+
+.final video { width: 260px; border: var(--border); box-shadow: var(--shadow); }
+.coming-soon { position: relative; }
+.coming-soon::after {
+  content: "COMING SOON"; position: absolute; top: -8px; right: -8px;
+  font-size: 9px; background: var(--yellow); color: var(--nord0);
+  padding: 1px 5px; letter-spacing: 1px;
+}
+
+.banner {
+  padding: 8px 14px; margin-bottom: 20px; font-size: 13px;
+  border: var(--border); background: var(--nord1);
+}
+.banner.warn { border-color: var(--yellow); color: var(--yellow); }
+.banner.dry { border-color: var(--frost2); color: var(--frost2); }
+
+/* 登入 */
+.login-wrap { max-width: 380px; margin: 80px auto; }

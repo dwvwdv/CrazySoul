@@ -24,10 +24,14 @@ def generate_clip(
     out_path: Path,
     cfg: Config,
     costs: list[CostEntry],
+    variant: int = 0,
 ) -> Path:
+    """從選定的圖生成單一段影片。variant 用來產生不同運鏡的候選。"""
     if cfg.dry_run:
-        ffmpeg.image_to_motion_clip(image_path, out_path, shot.duration)
-        costs.append(CostEntry("video", "dry-run(motion-engine)", 0.0, f"分鏡{shot.index}"))
+        ffmpeg.image_to_motion_clip(image_path, out_path, shot.duration, variant=variant)
+        costs.append(
+            CostEntry("video", "dry-run(motion-engine)", 0.0, f"分鏡{shot.index} 候選{variant}")
+        )
         return out_path
 
     if cfg.video_provider != "fal-kling":
@@ -53,7 +57,9 @@ def generate_clip(
     # 統一畫布/編碼,確保後續 concat 無縫。
     ffmpeg.normalize_clip(raw, out_path, duration=shot.duration)
     raw.unlink(missing_ok=True)
-    costs.append(CostEntry("video", "fal-kling", _KLING_UNIT_USD, f"分鏡{shot.index}"))
+    costs.append(
+        CostEntry("video", "fal-kling", _KLING_UNIT_USD, f"分鏡{shot.index} 候選{variant}")
+    )
     return out_path
 
 

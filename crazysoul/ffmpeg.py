@@ -51,7 +51,8 @@ WIDTH, HEIGHT, FPS = 1080, 1920, 30
 def make_placeholder_image(out_path: Path, label: str, seed: int) -> None:
     """dry-run 用:產生一張純色佔位圖,代替真正的 Image Provider。
 
-    用 ffmpeg 的 lavfi color source,不依賴 PIL。顏色由 seed 決定,方便肉眼分辨分鏡。
+    用 ffmpeg 的 lavfi color source,不依賴 PIL。顏色由 seed 決定,方便肉眼分辨
+    不同分鏡與同一分鏡的不同候選(縮圖牆挑選)。
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     hue = (seed * 47) % 360
@@ -66,17 +67,26 @@ def make_placeholder_image(out_path: Path, label: str, seed: int) -> None:
     )
 
 
-def image_to_motion_clip(image_path: Path, out_path: Path, duration: float) -> None:
+def image_to_motion_clip(
+    image_path: Path, out_path: Path, duration: float, variant: int = 0
+) -> None:
     """把靜態圖做成「看起來在動」的影片片段(Motion Engine 的 zoompan)。
 
     Phase 0 的 dry-run 用它代替 Video Provider;Phase 1 之後這就是 5b 靜態路徑的實作基礎。
+    variant 讓同一張圖的多個候選有不同運鏡(推近 / 拉遠 / 較快推近),方便縮圖牆挑選。
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     total_frames = max(1, int(round(duration * FPS)))
-    # 緩慢推近(zoom-in)製造動態感;縮放後裁回畫布尺寸。
+    # 依 variant 選運鏡:0=緩慢推近,1=緩慢拉遠,其餘=較快推近。
+    if variant % 3 == 1:
+        z_expr = "max(1.15-0.0008*on,1.0)"  # zoom-out
+    elif variant % 3 == 2:
+        z_expr = "min(zoom+0.0016,1.30)"     # 較快推近
+    else:
+        z_expr = "min(zoom+0.0008,1.15)"     # 緩慢推近
     zoompan = (
         f"scale={WIDTH * 2}:{HEIGHT * 2},"
-        f"zoompan=z='min(zoom+0.0008,1.15)':d={total_frames}:"
+        f"zoompan=z='{z_expr}':d={total_frames}:"
         f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
         f"s={WIDTH}x{HEIGHT}:fps={FPS}"
     )

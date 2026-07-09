@@ -269,5 +269,44 @@ pytest        # 全程 dry-run,只需要 ffmpeg,不需要憑證或網路
 | `crazysoul/ffmpeg.py` | [5b] Motion Engine + [7] Composition Engine |
 | `crazysoul/pipeline.py` | Phase 0 編排 |
 | `crazysoul/config.py` | 憑證 / 成本護欄設定 |
+| `crazysoul/web/` | [0] Web Console(Phase 4) |
 
-> 尚未實作(照 README 階段順序往後做):Routing Decision(Phase 1)、Character DB(Phase 2)、Provider 抽象與批量 count=n(Phase 3)、Web Console(Phase 4)、音訊字幕(Phase 5)、延伸與 pCloud 上傳(Phase 6)、成本治理儀表板(Phase 7)、Docker 化部署(Phase 8)。
+---
+
+## Web Console(Phase 4,最小可用版)
+
+把 Phase 0 管線包成非同步任務,提供人機協作介面:**批量生成 → 縮圖牆挑選 → 下一步**。前端由 FastAPI 直接內嵌 SPA(原生 HTML/JS),不需要額外的 build 工具鏈。
+
+### 啟動
+
+```bash
+# 離線 dry-run(用 FFmpeg 佔位素材,不呼叫付費 API),預設密碼 crazysoul
+CRAZYSOUL_DRY_RUN=1 python -m crazysoul.web
+# 開瀏覽器到 http://127.0.0.1:8000
+
+# 實際生成:設好 .env 的金鑰後
+python -m crazysoul.web
+```
+
+環境變數:
+
+| 變數 | 說明 |
+|---|---|
+| `WEB_PASSWORD` / `WEB_PASSWORD_HASH` | 登入密碼(明文或 sha256 hex);未設定用開發預設 `crazysoul` |
+| `WEB_SECRET_KEY` | cookie 簽章金鑰;未設定則每次啟動隨機(重啟後需重新登入) |
+| `CRAZYSOUL_DRY_RUN=1` | 離線模式 |
+| `CRAZYSOUL_WEB_HOST` / `_PORT` | 綁定位址(預設 `127.0.0.1:8000`) |
+
+### 主線流程
+
+1. 單一密碼登入(環境變數存密碼、無帳號系統)。
+2. 輸入主題 → 產生分鏡。
+3. 每個分鏡「一次生成 n 張圖」→ 縮圖牆 → **點選一張**(選中用 frost1 邊框)。
+4. 針對選中的圖「一次生成 n 段影片」→ 逐一預覽 → **點選一段**。
+5. 全部分鏡選完 → 合成最終影片 → **保存至 pCloud**(實際 WebDAV 上傳留待 Phase 6);「發布至 YouTube Shorts」為 Coming Soon 佔位(disabled)。
+
+視覺風格套用 `lazyrhythm-design` 基礎版(Nord × Brutalism,冷色調 + 偏移硬陰影 + frost 藍強調)。每個生成節點都是非同步任務,前端輪詢 `/api/jobs/{id}` 直到完成。
+
+> 尚未實作(照 README 階段順序往後做):Routing Decision(Phase 1)、Character DB(Phase 2)、Provider 抽象與批量 count=n 的正式介面(Phase 3)、音訊字幕(Phase 5)、影片延伸 Extend 與 pCloud 實際上傳(Phase 6)、成本治理儀表板(Phase 7)、Docker 化部署(Phase 8)、YouTube Shorts 實作(Phase 10)。
+>
+> Web Console 目前為 Phase 4 最小可用版:主線可跑通,批量圖片候選已支援(Phase 3 的 `count=n` 雛形),但 Provider 尚未包成正式統一介面,配樂/配音(Phase 5)也還沒接。
