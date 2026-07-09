@@ -216,3 +216,58 @@ Prompt / 主題
 - **不在 Phase 0 就設計完美的 Provider 抽象層**:先跑通一家,再抽象,避免脫離現實的過度設計。
 - **不省略重試成本估算**:預算永遠抓實際單價 × 1.3~1.5,不要用官方報價當最終成本。
 - **不做多使用者權限系統**:單人使用的內部工具,Web Console 不需要角色權限、多租戶這類設計,頂多加一層簡單密碼或 IP 白名單。
+
+---
+
+## 快速開始(Phase 0)
+
+目前實作到 **Phase 0:打通單一路徑**——LLM 出分鏡 → 生圖 → 生成影片(先不分流)→ FFmpeg 硬串接 → 產出最終 MP4。以 CLI 驗證資料流,尚無 Web UI。
+
+### 安裝
+
+```bash
+pip install -r requirements.txt
+```
+
+`imageio-ffmpeg` 會附帶一個 ffmpeg binary;若系統已裝 ffmpeg 會優先使用系統版本。
+
+### 離線試跑(dry-run,不花錢、不連網)
+
+不需要任何憑證,用 FFmpeg 佔位素材(純色圖 + zoompan 運鏡)驗證整條資料流:
+
+```bash
+python -m crazysoul.cli --prompt "深夜便利商店的貓" --dry-run --shots 3
+```
+
+產物落在 `output/<時間戳>/`:`storyboard.json`、`images/`、`clips/`、`final.mp4`、`cost_log.json`。
+
+### 實際生成(需憑證)
+
+複製 `.env.example` 成 `.env` 填入金鑰(`ANTHROPIC_API_KEY`、`FAL_KEY`),然後:
+
+```bash
+python -m crazysoul.cli --prompt "深夜便利商店的貓" --shots 4
+```
+
+- 分鏡:Anthropic Opus 4.8(structured outputs 強制輸出合法 JSON)
+- 生圖:Flux via fal.ai
+- 生成影片:Kling via fal.ai(image-to-video)
+
+### 測試
+
+```bash
+pytest        # 全程 dry-run,只需要 ffmpeg,不需要憑證或網路
+```
+
+### 程式結構(對應上面的模組編號)
+
+| 檔案 | 對應模組 |
+|---|---|
+| `crazysoul/storyboard.py` | [1] Storyboard Generator |
+| `crazysoul/providers/image.py` | [3] Image Provider Layer(Flux) |
+| `crazysoul/providers/video.py` | [5a] Video Provider Layer(Kling) |
+| `crazysoul/ffmpeg.py` | [5b] Motion Engine + [7] Composition Engine |
+| `crazysoul/pipeline.py` | Phase 0 編排 |
+| `crazysoul/config.py` | 憑證 / 成本護欄設定 |
+
+> 尚未實作(照 README 階段順序往後做):Routing Decision(Phase 1)、Character DB(Phase 2)、Provider 抽象與批量 count=n(Phase 3)、Web Console(Phase 4)、音訊字幕(Phase 5)、延伸與 pCloud 上傳(Phase 6)、成本治理儀表板(Phase 7)、Docker 化部署(Phase 8)。
