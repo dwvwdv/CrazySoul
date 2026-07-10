@@ -1,7 +1,7 @@
 services:
   web-backend:
     build: .
-    command: python -m crazysoul.web
+    command: python -m uvicorn crazysoul.web.app:app --host 0.0.0.0 --port 8000
     env_file: .env
     ports:
       - "8000:8000"
@@ -9,7 +9,7 @@ services:
       - ./output:/app/output
   worker:
     build: .
-    command: python -m crazysoul.cli --help
+    command: python -c "import time; print('CrazySoul worker placeholder ready', flush=True); time.sleep(10**9)"
     env_file: .env
     volumes:
       - ./output:/app/output
@@ -21,3 +21,4 @@ services:
       - "8080:80"
     volumes:
       - ./crazysoul/web/static:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

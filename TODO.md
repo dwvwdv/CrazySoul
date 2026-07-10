@@ -58,7 +58,7 @@
 - [x] 拆 `web-frontend` / `web-backend` / `worker` 三容器
 - [x] `docker-compose.yml` + `.env`
 - [ ] 接既有 Cloudflare Tunnel → HostDzire VPS
-- [x] worker 與 backend 分開(長任務不卡 API)
+- [ ] worker 與 backend 分開(長任務不卡 API)
 
 ### Phase 9 — 排程與觸發
 - [ ] 視需求接 n8n(定時產出 / Webhook 觸發)
@@ -80,6 +80,7 @@
 
 ### 任務佇列
 - [ ] 目前用 threading;評估 asyncio Task Queue,長遠接 worker 容器(Phase 8)
+- [ ] Docker worker 目前是獨立 placeholder;接上任務佇列後再承接長任務
 
 ---
 

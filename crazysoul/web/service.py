@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..audio import compose_audio_subtitles, make_srt, synthesize_voice
 from ..config import Config
 from ..ffmpeg import concat_clips, image_to_motion_clip
-from ..audio import compose_audio_subtitles, make_srt, synthesize_voice
 from ..pcloud import upload_file
 from ..providers.image import generate_image
 from ..providers.video import extend_clip, generate_clip
@@ -46,7 +46,9 @@ def run_image_candidates(
         rel = f"shot_{shot_idx:02d}/img_{k:02d}.png"
         out = pdir / rel
         generate_image(st.shot, out, cfg, project.costs, variant=k)
-        st.image_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="image"))
+        st.image_candidates.append(
+            Candidate(cid=cid, url=_media_url(project.pid, rel), kind="image")
+        )
     st.selected_image = None
     st.stage = "awaiting_image_pick"
     return {"count": len(st.image_candidates)}
@@ -80,7 +82,9 @@ def run_video_candidates(
             generate_clip(st.shot, image_path, out, cfg, project.costs, variant=k)
         else:
             image_to_motion_clip(image_path, out, st.shot.duration, variant=k)
-        st.video_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="video"))
+        st.video_candidates.append(
+            Candidate(cid=cid, url=_media_url(project.pid, rel), kind="video")
+        )
     st.selected_video = None
     st.stage = "awaiting_video_pick"
     return {"count": len(st.video_candidates)}
@@ -121,11 +125,16 @@ def run_audio_subtitles(cfg: Config, project: Project, narration: str | None = N
     voice = synthesize_voice(text, pdir / voice_rel, cfg, project.costs)
     duration = sum(s.shot.duration for s in project.shots) or 5.0
     subs = make_srt(text, pdir / sub_rel, duration)
-    compose_audio_subtitles(pdir / project.final_video.split(f"/media/{project.pid}/", 1)[1], voice, subs, pdir / out_rel)
+    final_rel = project.final_video.split(f"/media/{project.pid}/", 1)[1]
+    compose_audio_subtitles(pdir / final_rel, voice, subs, pdir / out_rel)
     project.voiceover = _media_url(project.pid, voice_rel)
     project.subtitles = _media_url(project.pid, sub_rel)
     project.final_with_audio = _media_url(project.pid, out_rel)
-    return {"voiceover": project.voiceover, "subtitles": project.subtitles, "final_video": project.final_with_audio}
+    return {
+        "voiceover": project.voiceover,
+        "subtitles": project.subtitles,
+        "final_video": project.final_with_audio,
+    }
 
 
 def run_extend_video(cfg: Config, project: Project, shot_idx: int, seconds: float = 5.0) -> dict:
@@ -148,7 +157,11 @@ def cost_dashboard(project: Project) -> dict:
     by_stage: dict[str, float] = {}
     for c in project.costs:
         by_stage[c.stage] = round(by_stage.get(c.stage, 0.0) + c.unit_cost_usd, 4)
-    return {"total_cost_usd": round(sum(by_stage.values()), 4), "by_stage": by_stage, "entries": [c.to_dict() for c in project.costs]}
+    return {
+        "total_cost_usd": round(sum(by_stage.values()), 4),
+        "by_stage": by_stage,
+        "entries": [c.to_dict() for c in project.costs],
+    }
 
 
 def save_to_pcloud(project: Project, cfg: Config | None = None) -> dict:
