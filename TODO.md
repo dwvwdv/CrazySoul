@@ -11,10 +11,12 @@
 ## ✅ 已完成
 - [x] **Phase 0** — 打通單一路徑(LLM 分鏡 → 生圖 → 生影片 → FFmpeg 串接),CLI + dry-run
 - [x] **Phase 1** — Routing Decision:依 `needs_motion` + 動態比例上限分流(Video Provider / Motion Engine)
+- [x] **Phase 2** — Character DB:角色資料結構 + Web 上傳參考圖 + 分鏡標記出場角色 + 生圖帶入一致性
+- [x] **Phase 3** — Provider 抽象層:統一 `ImageProvider`/`VideoProvider` 介面 + 註冊表 + 第二家(fal-sdxl / fal-wan)+ `count=n` 原生批量
 - [x] **Phase 4** — Web Console 最小可用版(登入 → 批量生成 → 縮圖牆挑選 → 合成 → 保存佔位)
-- [x] 縮圖牆批量候選(Phase 3 的 `count=n` 雛形,用 variant 產生差異)
+- [x] 縮圖牆批量候選(`count=n`,dry-run 佔位圖顏色由 seed 決定,肉眼可分辨)
 - [x] lazyrhythm-design 基礎風格(Nord × Brutalism)
-- [x] CI(GitHub Actions,Python 3.11 / 3.12)+ 測試 41 項
+- [x] CI(GitHub Actions,Python 3.11 / 3.12)+ 測試 52 項
 
 ---
 
@@ -27,16 +29,18 @@
 - [x] 測試:分流邏輯單元測試 + 混合路徑合成端到端(`tests/test_routing.py`)
 - [ ] 後續:路徑已鎖定(生成影片後)時,前端隱藏覆寫鈕的體驗可再優化;live 模式下 Motion Engine 與 Kling 的畫質差異需實測
 
-### Phase 2 — Character DB(角色一致性)
-- [ ] `characters` 資料結構(名稱、參考圖、seed、風格 tag)
-- [ ] Web Console:上傳角色參考圖
-- [ ] 生圖時帶入參考圖(reference / IPAdapter)或平台原生一致性參數
-- [ ] 分鏡可標記出場角色,生圖自動帶入
+### Phase 2 — Character DB(角色一致性)✅
+- [x] `characters` 資料結構(名稱、參考圖、seed、風格 tag)— `models.Character`
+- [x] Web Console:上傳角色參考圖(multipart,存專案目錄,`POST /projects/{pid}/characters`)
+- [x] 生圖時帶入一致性:seed 走平台原生參數、style_tag 併入 prompt、ref_image 供 reference/IPAdapter
+- [x] 分鏡可標記出場角色(`POST /shots/{idx}/characters`),生圖自動帶入
+- [ ] 後續:真正的 reference / IPAdapter live 實作(目前 live 僅帶 seed + style_tag;ref_image 已保存待接);角色庫接 Supabase 持久化
 
-### Phase 3 — Provider 抽象層
-- [ ] 把 image/video 包成統一介面 `image.generate(prompt, character_ref, count=n)` / `video.generate(image, duration, motion_hint, count=n)`
-- [ ] 新增第二家 provider(image: SDXL/GPT-Image;video: Wan)驗證抽象成立
-- [ ] `count=n` 原生批量(目前是逐次呼叫模擬)
+### Phase 3 — Provider 抽象層 ✅
+- [x] 統一介面 `image.generate_images(ImageRequest, out_paths)` / `video.generate_clips(VideoRequest, out_paths)`(見 `providers/base.py`)
+- [x] 新增第二家 provider(image: fal-sdxl;video: fal-wan)驗證抽象成立,以字串選 Provider
+- [x] `count=n` 原生批量(flux `num_images=n` 一次呼叫;dry-run 一次產多張)
+- [ ] 後續:第二家的 live 端點與回傳格式需實測(目前僅驗證 dry-run 與介面一致性);Web UI 可加 Provider 選擇下拉
 
 ### Phase 5 — 音訊與字幕
 - [ ] TTS 配音(ElevenLabs 或 OpenAI TTS)

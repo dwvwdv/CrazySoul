@@ -15,14 +15,23 @@ from pathlib import Path
 
 from .config import Config
 from .ffmpeg import concat_clips
-from .models import CostEntry, RunResult, ShotResult
+from .models import Character, CostEntry, RunResult, ShotResult
 from .providers.image import generate_image
 from .routing import decide_routes, render_clip
 from .storyboard import generate_storyboard
 
 
-def run_pipeline(prompt: str, cfg: Config, num_shots: int = 3) -> RunResult:
-    """跑一次完整 Phase 0 管線,回傳結果與產物路徑。"""
+def run_pipeline(
+    prompt: str,
+    cfg: Config,
+    num_shots: int = 3,
+    characters: list[Character] | None = None,
+) -> RunResult:
+    """跑一次完整 Phase 0 管線,回傳結果與產物路徑。
+
+    `characters`:Phase 2 角色庫;分鏡標記的出場角色會在生圖時自動帶入。
+    """
+    char_map = {c.name: c for c in (characters or [])}
     run_dir = cfg.output_root / datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -46,9 +55,14 @@ def run_pipeline(prompt: str, cfg: Config, num_shots: int = 3) -> RunResult:
     shot_results: list[ShotResult] = []
     for shot in storyboard.shots:
         route = routes[shot.index]
+        shot_chars = [char_map[n] for n in shot.characters if n in char_map]
         _log(f"分鏡 {shot.index + 1}/{len(storyboard.shots)}:生圖…")
         image_path = generate_image(
-            shot, run_dir / "images" / f"shot_{shot.index:02d}.png", cfg, costs
+            shot,
+            run_dir / "images" / f"shot_{shot.index:02d}.png",
+            cfg,
+            costs,
+            characters=shot_chars,
         )
         path_label = "動態 Video Provider" if route == "video" else "靜態 Motion Engine"
         _log(f"分鏡 {shot.index + 1}/{len(storyboard.shots)}:生成影片({path_label})…")

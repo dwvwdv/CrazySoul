@@ -13,3 +13,6 @@ imageio-ffmpeg>=0.5.1
 # Web Console(Phase 4):FastAPI 後端 + 內嵌 SPA,不需要前端 build 工具鏈
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
+
+# Phase 2 角色參考圖上傳(FastAPI 解析 multipart/form-data 需要)
+python-multipart>=0.0.9

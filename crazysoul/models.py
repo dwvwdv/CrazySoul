@@ -11,6 +11,33 @@ from typing import Any
 
 
 @dataclass
+class Character:
+    """角色一致性資料(Phase 2 Character DB,對應 Supabase `characters`)。
+
+    生圖時把這些資訊帶入 Provider:`seed` 走平台原生一致性參數、
+    `style_tag` 併入 prompt、`ref_image` 供支援 reference / IPAdapter 的 Provider 使用。
+    """
+
+    name: str
+    ref_image: str | None = None   # 參考圖:本地路徑或可存取 URL
+    seed: int | None = None        # 固定 seed,拉住同一角色的外觀一致性
+    style_tag: str = ""            # 風格描述,生圖時併入 prompt
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "Character":
+        seed = data.get("seed")
+        return Character(
+            name=str(data.get("name", "")).strip(),
+            ref_image=(str(data["ref_image"]) if data.get("ref_image") else None),
+            seed=(int(seed) if seed not in (None, "") else None),
+            style_tag=str(data.get("style_tag", "")).strip(),
+        )
+
+
+@dataclass
 class Shot:
     """單一分鏡。對應 README「Storyboard Generator」的輸出結構。"""
 
@@ -20,9 +47,11 @@ class Shot:
     needs_motion: bool = True  # 是否標記為「需要動態」(Phase 1 Routing 用)
     duration: float = 5.0      # 預估秒數
     motion_hint: str = ""      # 給影片 Provider 的運鏡提示
+    characters: list[str] = field(default_factory=list)  # 出場角色名(Phase 2,生圖自動帶入)
 
     @staticmethod
     def from_dict(data: dict[str, Any], index: int) -> "Shot":
+        raw_chars = data.get("characters") or []
         return Shot(
             index=index,
             description=str(data.get("description", "")).strip(),
@@ -30,6 +59,7 @@ class Shot:
             needs_motion=bool(data.get("needs_motion", True)),
             duration=float(data.get("duration", 5.0)),
             motion_hint=str(data.get("motion_hint", "")),
+            characters=[str(c).strip() for c in raw_chars if str(c).strip()],
         )
 
 

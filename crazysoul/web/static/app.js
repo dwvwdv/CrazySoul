@@ -32,6 +32,7 @@ async function pollJob(jid, onTick) {
 
 const $ = (id) => document.getElementById(id);
 let currentPid = null;
+let currentProject = null;  // 最近一次載入的專案(給分鏡渲染角色清單用)
 
 // ---- 啟動 ----
 async function init() {
@@ -101,12 +102,15 @@ async function loadProject() {
 }
 
 function renderProject(p) {
+  currentProject = p;
   $("project").classList.remove("hidden");
   $("project-title").textContent = p.title || p.prompt;
   const dynPct = Math.round((p.dynamic_ratio ?? 1) * 100);
   const dynCount = p.shots.filter((s) => s.route === "video").length;
   $("project-meta").textContent =
     `${p.shots.length} 個分鏡 · 動態上限 ${dynPct}%(${dynCount} 動態 / ${p.shots.length - dynCount} 靜態）· 估算成本 $${p.total_cost_usd}`;
+
+  renderCharacters(p.characters || []);
 
   const container = $("shots-container");
   container.innerHTML = "";
@@ -119,6 +123,62 @@ function renderProject(p) {
     $("final-video").src = p.final_video;
   }
   $("save-status").textContent = p.saved_to_pcloud ? "已保存至 pCloud ✓" : "";
+}
+
+// ---- Phase 2:角色庫 ----
+function renderCharacters(chars) {
+  const list = $("characters-list");
+  list.innerHTML = "";
+  if (!chars.length) {
+    list.innerHTML = `<span class="muted" style="font-size:13px">尚無角色。新增後可在各分鏡標記出場,生圖會自動帶入一致性。</span>`;
+    return;
+  }
+  for (const c of chars) {
+    const chip = document.createElement("div");
+    chip.className = "char-chip";
+    const thumb = c.ref_image ? `<img src="${c.ref_image}" alt="${c.name}" />` : "";
+    const bits = [c.style_tag, c.seed != null ? `seed ${c.seed}` : ""].filter(Boolean).join(" · ");
+    chip.innerHTML = `${thumb}<span class="char-name">${c.name}</span>${bits ? `<span class="muted char-meta">${bits}</span>` : ""}`;
+    list.appendChild(chip);
+  }
+}
+
+$("add-char-btn").addEventListener("click", async () => {
+  const name = $("char-name").value.trim();
+  if (!name) { $("char-status").textContent = "請先輸入角色名。"; return; }
+  const fd = new FormData();
+  fd.append("name", name);
+  fd.append("style_tag", $("char-style").value.trim());
+  fd.append("seed", $("char-seed").value.trim());
+  const f = $("char-file").files[0];
+  if (f) fd.append("file", f);
+  $("char-status").textContent = "新增中…";
+  try {
+    const resp = await fetch(`/api/projects/${currentPid}/characters`, { method: "POST", body: fd });
+    if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || resp.statusText);
+    $("char-name").value = ""; $("char-style").value = ""; $("char-seed").value = ""; $("char-file").value = "";
+    $("char-status").textContent = "已新增 ✓";
+    await loadProject();
+  } catch (e) {
+    $("char-status").innerHTML = `<span class="error">${e.message}</span>`;
+  }
+});
+
+// 分鏡的出場角色勾選(多選)
+function shotCharacterPicker(s) {
+  const chars = (currentProject && currentProject.characters) || [];
+  const box = document.createElement("div");
+  box.className = "shot-chars";
+  if (!chars.length) return box;  // 沒有角色就不顯示
+  const assigned = new Set(s.characters || []);
+  const chips = chars
+    .map(
+      (c) =>
+        `<label class="char-check"><input type="checkbox" data-act="toggle-char" data-idx="${s.index}" data-name="${c.name}" ${assigned.has(c.name) ? "checked" : ""}/> ${c.name}</label>`
+    )
+    .join("");
+  box.innerHTML = `<span class="muted" style="font-size:12px">出場角色:</span>${chips}`;
+  return box;
 }
 
 function renderShot(s) {
@@ -150,6 +210,9 @@ function renderShot(s) {
     </div>
     <div class="desc">${s.description}</div>
   `;
+
+  // Phase 2:出場角色勾選(影響下一次生圖)
+  wrap.appendChild(shotCharacterPicker(s));
 
   // 圖片區
   if (s.stage === "need_images") {
@@ -234,6 +297,23 @@ $("shots-container").addEventListener("click", async (e) => {
       await api("POST", `/api/projects/${currentPid}/shots/${idx}/route`, { route: t.dataset.route });
       await loadProject();
     }
+  } catch (err) {
+    alert(err.message);
+    await loadProject();
+  }
+});
+
+// 出場角色勾選(checkbox 用 change 事件)
+$("shots-container").addEventListener("change", async (e) => {
+  const t = e.target.closest("[data-act='toggle-char']");
+  if (!t) return;
+  const idx = parseInt(t.dataset.idx, 10);
+  // 收集這個分鏡目前所有勾選的角色
+  const boxes = t.closest(".shot-chars").querySelectorAll("input[type=checkbox]");
+  const names = [...boxes].filter((b) => b.checked).map((b) => b.dataset.name);
+  try {
+    await api("POST", `/api/projects/${currentPid}/shots/${idx}/characters`, { names });
+    await loadProject();
   } catch (err) {
     alert(err.message);
     await loadProject();

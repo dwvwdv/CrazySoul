@@ -1,6 +1,8 @@
 """[3] Image Provider Layer 與 [5a] Video Provider Layer。
 
-Phase 0 只接一家(Flux / Kling via fal.ai),先跑通再抽象——
-所以這裡還不是完整的統一介面,只是把「呼叫哪一家」收在同一層,
-之後 Phase 3 再包成 image.generate() / video.generate() 的正式抽象。
+Phase 3 已抽象成統一介面(見 `base.py`):
+  - `ImageProvider` / `VideoProvider` ABC + 註冊表。
+  - 生圖:`image.generate_images(ImageRequest, out_paths)`,Provider 有 fal-flux / fal-sdxl。
+  - 生影片:`video.generate_clips(VideoRequest, out_paths)`,Provider 有 fal-kling / fal-wan。
+業務邏輯只用字串選 Provider(`cfg.image_provider` / `cfg.video_provider`),不綁死 SDK。
 """

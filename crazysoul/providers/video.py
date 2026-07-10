@@ -1,8 +1,11 @@
-"""[5a] Video Provider Layer — Phase 0 主力:Kling via fal.ai(image-to-video)。
+"""[5a] Video Provider Layer。
 
-介面:generate_clip(shot, image_path, out_path, cfg, costs) → 產出一段標準化影片。
-Phase 0 不分流,所有分鏡都走這條(README Phase 0 說明:先不分流)。
-dry-run 用 FFmpeg Motion Engine(zoompan)代替,零成本驗證資料流。
+Phase 0 主力:Kling via fal.ai(image-to-video)。Phase 3 抽象化:所有生影片
+Provider 都實作 `VideoProvider` 介面並註冊,業務邏輯用字串選(`cfg.video_provider`)。
+另備第二家 `fal-wan` 驗證抽象成立。
+
+dry-run 一律用 FFmpeg Motion Engine(zoompan)代替,零成本驗證資料流;
+每個候選用不同 variant 產生不同運鏡。
 """
 
 from __future__ import annotations
@@ -13,9 +16,84 @@ from .. import ffmpeg
 from ..config import Config
 from ..models import CostEntry, Shot
 from . import falai
+from .base import (
+    VideoProvider,
+    VideoRequest,
+    get_video_provider,
+    register_video_provider,
+)
 
-# Kling (fal.ai) 粗估單價(每段 5 秒),實際以帳單為準。
-_KLING_UNIT_USD = 0.28
+
+class _FalVideoProvider(VideoProvider):
+    """fal.ai 系 image-to-video Provider 的共用實作。"""
+
+    endpoint: str = ""
+
+    def generate(
+        self,
+        req: VideoRequest,
+        out_paths: list[Path],
+        cfg: Config,
+        costs: list[CostEntry],
+        start: int = 0,
+    ) -> list[Path]:
+        for k, out in enumerate(out_paths):
+            variant = start + k
+            if cfg.dry_run:
+                ffmpeg.image_to_motion_clip(req.image_path, out, req.duration, variant=variant)
+                costs.append(
+                    CostEntry("video", f"dry-run/{self.name}", 0.0, f"分鏡{req.shot_index} 候選{variant}")
+                )
+                continue
+
+            if not cfg.fal_key:
+                raise RuntimeError("未設定 FAL_KEY(或改用 --dry-run)。")
+            # fal.ai 需要可存取的圖片 URL;先上傳到 fal 儲存再餵給 image-to-video。
+            image_url = _upload_image(req.image_path, cfg.fal_key)
+            result = falai.run_model(
+                cfg.fal_key,
+                endpoint=self.endpoint,
+                payload={
+                    "prompt": req.motion_hint or "",
+                    "image_url": image_url,
+                    "duration": str(int(round(req.duration))),
+                },
+            )
+            raw = out.with_name(out.stem + "_raw.mp4")
+            falai.download(result["video"]["url"], raw, cfg.fal_key)
+            ffmpeg.normalize_clip(raw, out, duration=req.duration)  # 統一畫布/編碼,無縫串接
+            raw.unlink(missing_ok=True)
+            costs.append(
+                CostEntry("video", self.name, self.unit_cost_usd, f"分鏡{req.shot_index} 候選{variant}")
+            )
+        return out_paths
+
+
+@register_video_provider
+class KlingVideoProvider(_FalVideoProvider):
+    name = "fal-kling"
+    unit_cost_usd = 0.28  # 每段約 5 秒,粗估,實際以帳單為準
+    endpoint = "fal-ai/kling-video/v1/standard/image-to-video"
+
+
+@register_video_provider
+class WanVideoProvider(_FalVideoProvider):
+    """第二家生影片 Provider,驗證抽象成立(fal.ai Wan image-to-video)。"""
+
+    name = "fal-wan"
+    unit_cost_usd = 0.20
+    endpoint = "fal-ai/wan-i2v"
+
+
+def generate_clips(
+    req: VideoRequest,
+    out_paths: list[Path],
+    cfg: Config,
+    costs: list[CostEntry],
+    start: int = 0,
+) -> list[Path]:
+    """統一入口:依 `cfg.video_provider` 選 Provider,產出多段候選。"""
+    return get_video_provider(cfg.video_provider).generate(req, out_paths, cfg, costs, start)
 
 
 def generate_clip(
@@ -26,41 +104,14 @@ def generate_clip(
     costs: list[CostEntry],
     variant: int = 0,
 ) -> Path:
-    """從選定的圖生成單一段影片。variant 用來產生不同運鏡的候選。"""
-    if cfg.dry_run:
-        ffmpeg.image_to_motion_clip(image_path, out_path, shot.duration, variant=variant)
-        costs.append(
-            CostEntry("video", "dry-run(motion-engine)", 0.0, f"分鏡{shot.index} 候選{variant}")
-        )
-        return out_path
-
-    if cfg.video_provider != "fal-kling":
-        raise NotImplementedError(
-            f"目前只實作 fal-kling 影片 Provider(收到 {cfg.video_provider!r})。"
-        )
-    if not cfg.fal_key:
-        raise RuntimeError("未設定 FAL_KEY(或改用 --dry-run)。")
-
-    # fal.ai 需要可存取的圖片 URL;Phase 0 先上傳到 fal 儲存再餵給 Kling。
-    image_url = _upload_image(image_path, cfg.fal_key)
-    result = falai.run_model(
-        cfg.fal_key,
-        endpoint="fal-ai/kling-video/v1/standard/image-to-video",
-        payload={
-            "prompt": shot.motion_hint or shot.description,
-            "image_url": image_url,
-            "duration": str(int(round(shot.duration))),
-        },
+    """單段生影片的相容包裝(routing / 舊呼叫端用)。variant 產生不同運鏡候選。"""
+    req = VideoRequest(
+        image_path=image_path,
+        duration=shot.duration,
+        motion_hint=shot.motion_hint or shot.description,
+        shot_index=shot.index,
     )
-    raw = out_path.with_name(out_path.stem + "_raw.mp4")
-    falai.download(result["video"]["url"], raw, cfg.fal_key)
-    # 統一畫布/編碼,確保後續 concat 無縫。
-    ffmpeg.normalize_clip(raw, out_path, duration=shot.duration)
-    raw.unlink(missing_ok=True)
-    costs.append(
-        CostEntry("video", "fal-kling", _KLING_UNIT_USD, f"分鏡{shot.index} 候選{variant}")
-    )
-    return out_path
+    return generate_clips(req, [out_path], cfg, costs, start=variant)[0]
 
 
 def _upload_image(image_path: Path, fal_key: str) -> str:

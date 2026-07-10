@@ -63,6 +63,33 @@
     <div id="project" class="card hidden">
       <h2 id="project-title"></h2>
       <div class="muted" id="project-meta"></div>
+
+      <!-- Phase 2:角色庫 -->
+      <div id="characters-block" style="margin:16px 0; border-top: var(--border); padding-top:16px">
+        <h3 style="margin:0 0 8px">角色庫 <span class="muted" style="font-size:12px">(生圖一致性)</span></h3>
+        <div id="characters-list" class="char-list"></div>
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label for="char-name">角色名</label>
+            <input type="text" id="char-name" placeholder="例:小黑貓" />
+          </div>
+          <div>
+            <label for="char-style">風格 tag</label>
+            <input type="text" id="char-style" placeholder="例:黑色短毛貓,綠眼" />
+          </div>
+          <div>
+            <label for="char-seed">seed(選填)</label>
+            <input type="number" id="char-seed" placeholder="例:1234" style="width:110px" />
+          </div>
+          <div>
+            <label for="char-file">參考圖(選填)</label>
+            <input type="file" id="char-file" accept="image/*" />
+          </div>
+          <button id="add-char-btn" class="secondary">新增角色</button>
+          <span class="status-line" id="char-status"></span>
+        </div>
+      </div>
+
       <div id="shots-container"></div>
 
       <div id="finalize" class="hidden" style="margin-top:20px; border-top: var(--border); padding-top:16px">

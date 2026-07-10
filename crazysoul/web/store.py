@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Literal
 
-from ..models import CostEntry, Shot
+from ..models import Character, CostEntry, Shot
 from ..routing import Route
 
 # 分鏡在主線上的狀態機
@@ -62,9 +62,17 @@ class Project:
     dynamic_ratio: float = 1.0          # Phase 1 動態分鏡比例上限
     title: str = ""
     shots: list[ShotState] = field(default_factory=list)
+    characters: list[Character] = field(default_factory=list)  # Phase 2 角色庫
     costs: list[CostEntry] = field(default_factory=list)
     final_video: str | None = None      # /media URL
     saved_to_pcloud: bool = False
+
+    def character(self, name: str) -> Character | None:
+        return next((c for c in self.characters if c.name == name), None)
+
+    def resolve_characters(self, names: list[str]) -> list[Character]:
+        """把分鏡標記的角色名解析成角色物件(略過找不到的)。"""
+        return [c for n in names if (c := self.character(n))]
 
     def as_dict(self) -> dict:
         return {
@@ -76,12 +84,23 @@ class Project:
             "final_video": self.final_video,
             "saved_to_pcloud": self.saved_to_pcloud,
             "total_cost_usd": round(sum(c.unit_cost_usd for c in self.costs), 4),
+            "characters": [
+                {
+                    "name": c.name,
+                    "style_tag": c.style_tag,
+                    "seed": c.seed,
+                    # ref_image 以專案內相對路徑保存,對外給可顯示的 /media URL
+                    "ref_image": (f"/media/{self.pid}/{c.ref_image}" if c.ref_image else None),
+                }
+                for c in self.characters
+            ],
             "shots": [
                 {
                     "index": s.shot.index,
                     "description": s.shot.description,
                     "shot_type": s.shot.shot_type,
                     "needs_motion": s.shot.needs_motion,
+                    "characters": s.shot.characters,
                     "route": s.route,
                     "stage": s.stage,
                     "image_candidates": [

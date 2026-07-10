@@ -9,7 +9,16 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
+from fastapi import (
+    Cookie,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -44,6 +53,10 @@ class PickBody(BaseModel):
 
 class RouteBody(BaseModel):
     route: str  # "video"(動態)/ "motion"(靜態)
+
+
+class ShotCharactersBody(BaseModel):
+    names: list[str] = []
 
 
 def make_config() -> Config:
@@ -135,6 +148,37 @@ def create_app() -> FastAPI:
     def set_route(pid: str, idx: int, body: RouteBody):
         try:
             return service.set_route(_project(pid), idx, body.route)  # type: ignore[arg-type]
+        except (ValueError, IndexError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    # ---- Phase 2:角色庫 ----
+    @app.post("/api/projects/{pid}/characters", dependencies=[Depends(require_auth)])
+    async def add_character(
+        pid: str,
+        name: str = Form(...),
+        style_tag: str = Form(""),
+        seed: str = Form(""),
+        file: UploadFile | None = File(None),
+    ):
+        project = _project(pid)
+        ref_rel: str | None = None
+        if file is not None:
+            data = await file.read()
+            suffix = Path(file.filename or "ref.png").suffix or ".png"
+            ref_rel = service.save_reference_image(cfg, project, name, data, suffix)
+        try:
+            seed_val = int(seed) if seed.strip() else None
+        except ValueError:
+            raise HTTPException(status_code=400, detail="seed 必須是整數")
+        try:
+            return service.add_character(project, name, style_tag, seed_val, ref_rel)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.post("/api/projects/{pid}/shots/{idx}/characters", dependencies=[Depends(require_auth)])
+    def set_shot_characters(pid: str, idx: int, body: ShotCharactersBody):
+        try:
+            return service.set_shot_characters(_project(pid), idx, body.names)
         except (ValueError, IndexError) as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
