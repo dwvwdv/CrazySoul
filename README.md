@@ -253,11 +253,14 @@ python -m crazysoul.cli --prompt "深夜便利商店的貓" --shots 4
 - 生圖:Flux via fal.ai
 - 生成影片:Kling via fal.ai(image-to-video)
 
-### 測試
+### 測試 / CI
 
 ```bash
+pip install -r requirements-dev.txt
 pytest        # 全程 dry-run,只需要 ffmpeg,不需要憑證或網路
 ```
+
+每次 push 與 PR 由 GitHub Actions(`.github/workflows/ci.yml`)在 Python 3.11 / 3.12 上跑整套測試;ffmpeg 用 `imageio-ffmpeg` 內建 binary,CI 不需要另外 apt 安裝。測試涵蓋:分鏡建構、Provider(dry-run)、FFmpeg 串接的端到端管線、Web Console 主線(登入 → 生成 → 挑選 → 合成)、身分驗證與簽章 cookie、設定載入、非同步任務、成本護欄,以及媒體端點的目錄穿越防護。
 
 ### 程式結構(對應上面的模組編號)
 
