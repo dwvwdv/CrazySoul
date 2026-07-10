@@ -124,11 +124,35 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   color: var(--frost2); letter-spacing: 1px;
 }
 .shot .desc { color: var(--nord5); }
+/* Phase 1 分流徽章:動態=frost、靜態=green */
+.shot .route {
+  font-size: 11px; padding: 1px 8px; border: 1px solid currentColor;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.shot .route.video { color: var(--frost2); }
+.shot .route.motion { color: var(--green); }
+.shot .route-switch {
+  font-size: 11px; padding: 1px 8px; letter-spacing: 0;
+}
 .shot .stage {
   font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
   color: var(--yellow); margin-left: auto;
 }
 .shot .stage.done { color: var(--green); }
+
+/* Phase 2:角色庫 */
+.char-list { display: flex; gap: 12px; flex-wrap: wrap; }
+.char-chip {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--nord3); padding: 6px 10px; background: var(--nord0);
+}
+.char-chip img {
+  width: 32px; height: 32px; object-fit: cover; border: 1px solid var(--nord3);
+}
+.char-chip .char-name { color: var(--frost1); font-weight: 700; }
+.char-chip .char-meta { font-size: 11px; }
+.shot-chars { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.char-check { font-size: 13px; color: var(--nord5); display: inline-flex; align-items: center; gap: 4px; }
 
 /* 縮圖牆:批量生成 n 個候選,選中用 frost1 邊框 */
 .wall {

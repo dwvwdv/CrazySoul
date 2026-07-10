@@ -17,7 +17,9 @@ _ANTHROPIC_OUTPUT_PER_TOKEN = 25.0 / 1_000_000
 _SYSTEM = (
     "你是短影音分鏡師。把使用者給的主題拆成一連串分鏡,"
     "每個分鏡要能直接餵給文生圖模型。畫面描述具體、有畫面感,"
-    "並標記鏡頭類型與是否需要動態。輸出繁體中文。"
+    "並標記鏡頭類型與是否需要動態。若畫面有反覆出現的角色,"
+    "在 characters 列出角色名(維持跨分鏡一致);沒有就給空陣列。"
+    "輸出繁體中文。"
 )
 
 # structured outputs 的 JSON schema。注意:不使用 minItems/maxLength 這類
@@ -39,6 +41,10 @@ _SCHEMA = {
                     "needs_motion": {"type": "boolean"},
                     "duration": {"type": "number"},
                     "motion_hint": {"type": "string"},
+                    "characters": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
                 },
                 "required": [
                     "description",
@@ -46,6 +52,7 @@ _SCHEMA = {
                     "needs_motion",
                     "duration",
                     "motion_hint",
+                    "characters",
                 ],
                 "additionalProperties": False,
             },
@@ -146,12 +153,13 @@ def _dry_run_storyboard(
             detail="離線假分鏡",
         )
     )
+    # 交錯標記 needs_motion,讓 Phase 1 分流在 dry-run 也能產生混合路徑,方便驗證。
     shots = [
         Shot(
             index=i,
             description=f"{prompt} — 分鏡 {i + 1}",
             shot_type=["wide", "medium", "close"][i % 3],
-            needs_motion=True,
+            needs_motion=(i % 2 == 0),
             duration=5.0,
             motion_hint="緩慢推近",
         )

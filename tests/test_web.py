@@ -98,6 +98,102 @@ def test_full_flow(client):
     assert client.post(f"/api/projects/{pid}/save_pcloud").json()["saved"] is True
 
 
+def test_routing_default_and_override(client):
+    client.post("/api/login", json={"password": "test-pw"})
+    # dynamic_ratio=0 → 全部分鏡預設走靜態 motion
+    r = client.post("/api/projects", json={"prompt": "分流測試", "shots": 3, "dynamic_ratio": 0})
+    pid = r.json()["pid"]
+    _wait_job(client, r.json()["job"])
+
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["dynamic_ratio"] == 0
+    assert all(s["route"] == "motion" for s in proj["shots"])
+    # 每個分鏡都帶出 needs_motion 供前端顯示
+    assert all("needs_motion" in s for s in proj["shots"])
+
+    # 手動覆寫第一個分鏡為動態 video
+    assert client.post(
+        f"/api/projects/{pid}/shots/0/route", json={"route": "video"}
+    ).json()["route"] == "video"
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["shots"][0]["route"] == "video"
+
+    # 未知路徑值應被擋
+    assert client.post(
+        f"/api/projects/{pid}/shots/0/route", json={"route": "bogus"}
+    ).status_code == 400
+
+
+def test_routing_full_ratio_follows_needs_motion(client):
+    client.post("/api/login", json={"password": "test-pw"})
+    # dynamic_ratio=1 → 依 needs_motion 分流(dry-run 交錯:0=動態,1=靜態)
+    r = client.post("/api/projects", json={"prompt": "x", "shots": 2, "dynamic_ratio": 1})
+    pid = r.json()["pid"]
+    _wait_job(client, r.json()["job"])
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["shots"][0]["route"] == "video"
+    assert proj["shots"][1]["route"] == "motion"
+
+
+def test_character_crud_and_assignment(client):
+    client.post("/api/login", json={"password": "test-pw"})
+    r = client.post("/api/projects", json={"prompt": "貓的故事", "shots": 2})
+    pid = r.json()["pid"]
+    _wait_job(client, r.json()["job"])
+
+    # 新增角色(含參考圖上傳)
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32  # 假 PNG bytes,dry-run 不會真的解碼
+    resp = client.post(
+        f"/api/projects/{pid}/characters",
+        data={"name": "小黑貓", "style_tag": "黑色短毛,綠眼", "seed": "1234"},
+        files={"file": ("ref.png", png, "image/png")},
+    )
+    assert resp.status_code == 200
+
+    # 再新增一個無參考圖的角色
+    assert client.post(
+        f"/api/projects/{pid}/characters", data={"name": "小白", "style_tag": "白貓"}
+    ).status_code == 200
+
+    proj = client.get(f"/api/projects/{pid}").json()
+    names = {c["name"] for c in proj["characters"]}
+    assert names == {"小黑貓", "小白"}
+    black = next(c for c in proj["characters"] if c["name"] == "小黑貓")
+    assert black["seed"] == 1234
+    assert black["ref_image"].startswith(f"/media/{pid}/characters/")
+    # 參考圖可透過受保護端點取得
+    assert client.get(black["ref_image"]).status_code == 200
+
+    # 標記分鏡 0 出場角色
+    assert client.post(
+        f"/api/projects/{pid}/shots/0/characters", json={"names": ["小黑貓", "不存在"]}
+    ).json()["characters"] == ["小黑貓"]  # 不存在的角色被過濾
+
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["shots"][0]["characters"] == ["小黑貓"]
+
+    # 生圖:帶入角色後仍能產出候選
+    job = client.post(f"/api/projects/{pid}/shots/0/images", json={"count": 2}).json()["job"]
+    _wait_job(client, job)
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert len(proj["shots"][0]["image_candidates"]) == 2
+
+
+def test_add_character_requires_name(client):
+    client.post("/api/login", json={"password": "test-pw"})
+    r = client.post("/api/projects", json={"prompt": "x", "shots": 1})
+    pid = r.json()["pid"]
+    _wait_job(client, r.json()["job"])
+    # 空名稱應被擋
+    assert client.post(
+        f"/api/projects/{pid}/characters", data={"name": "   "}
+    ).status_code == 400
+    # 非整數 seed 應被擋
+    assert client.post(
+        f"/api/projects/{pid}/characters", data={"name": "a", "seed": "abc"}
+    ).status_code == 400
+
+
 def test_media_path_traversal_blocked(client):
     client.post("/api/login", json={"password": "test-pw"})
     r = client.post("/api/projects", json={"prompt": "x", "shots": 1})

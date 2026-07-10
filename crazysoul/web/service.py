@@ -10,8 +10,10 @@ from pathlib import Path
 
 from ..config import Config
 from ..ffmpeg import concat_clips
-from ..providers.image import generate_image
-from ..providers.video import generate_clip
+from ..models import Character
+from ..providers.base import ImageRequest
+from ..providers.image import generate_images
+from ..routing import Route, decide_routes, render_clip
 from ..storyboard import generate_storyboard
 from .store import Candidate, Project, ShotState
 
@@ -29,8 +31,20 @@ def _media_url(pid: str, rel: str) -> str:
 def run_storyboard(cfg: Config, project: Project) -> dict:
     sb = generate_storyboard(project.prompt, cfg, project.costs, num_shots=project.num_shots)
     project.title = sb.title
-    project.shots = [ShotState(shot=s, stage="need_images") for s in sb.shots]
+    # Phase 1:依動態比例上限先算好每個分鏡的預設路徑,使用者可再手動覆寫。
+    routes = decide_routes(sb.shots, project.dynamic_ratio)
+    project.shots = [
+        ShotState(shot=s, stage="need_images", route=routes[s.index]) for s in sb.shots
+    ]
     return {"pid": project.pid, "shots": len(project.shots)}
+
+
+def set_route(project: Project, shot_idx: int, route: Route) -> dict:
+    """手動覆寫單一分鏡的分流路徑(video=動態 / motion=靜態)。"""
+    if route not in ("video", "motion"):
+        raise ValueError(f"未知路徑 {route!r}(只接受 video / motion)。")
+    project.shots[shot_idx].route = route
+    return {"route": route}
 
 
 def run_image_candidates(
@@ -38,16 +52,65 @@ def run_image_candidates(
 ) -> dict:
     st = project.shots[shot_idx]
     pdir = project_dir(cfg, project.pid)
-    st.image_candidates = []
-    for k in range(count):
-        cid = f"i{shot_idx}_{k}"
-        rel = f"shot_{shot_idx:02d}/img_{k:02d}.png"
-        out = pdir / rel
-        generate_image(st.shot, out, cfg, project.costs, variant=k)
-        st.image_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="image"))
+    # Phase 2:把分鏡標記的出場角色帶入生圖(seed / style_tag / 參考圖)
+    chars = project.resolve_characters(st.shot.characters)
+    req = ImageRequest(prompt=st.shot.description, shot_index=shot_idx, characters=chars)
+    out_paths = [pdir / f"shot_{shot_idx:02d}/img_{k:02d}.png" for k in range(count)]
+    # Phase 3:一次呼叫原生批量產出 count 張候選
+    generate_images(req, out_paths, cfg, project.costs)
+    st.image_candidates = [
+        Candidate(
+            cid=f"i{shot_idx}_{k}",
+            url=_media_url(project.pid, f"shot_{shot_idx:02d}/img_{k:02d}.png"),
+            kind="image",
+        )
+        for k in range(count)
+    ]
     st.selected_image = None
     st.stage = "awaiting_image_pick"
     return {"count": len(st.image_candidates)}
+
+
+# ---- Phase 2:角色庫 ----
+def save_reference_image(cfg: Config, project: Project, name: str, data: bytes, suffix: str) -> str:
+    """把角色參考圖存進專案目錄,回傳可存取的相對路徑。"""
+    safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_") or "char"
+    rel = f"characters/{safe}{suffix or '.png'}"
+    out = project_dir(cfg, project.pid) / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    return rel
+
+
+def add_character(
+    project: Project,
+    name: str,
+    style_tag: str = "",
+    seed: int | None = None,
+    ref_image: str | None = None,
+) -> dict:
+    """新增或更新一個角色(以名稱為主鍵)。"""
+    name = name.strip()
+    if not name:
+        raise ValueError("角色名稱不可為空。")
+    existing = project.character(name)
+    if existing:
+        existing.style_tag = style_tag.strip()
+        existing.seed = seed
+        if ref_image:
+            existing.ref_image = ref_image
+    else:
+        project.characters.append(
+            Character(name=name, style_tag=style_tag.strip(), seed=seed, ref_image=ref_image)
+        )
+    return {"name": name, "count": len(project.characters)}
+
+
+def set_shot_characters(project: Project, shot_idx: int, names: list[str]) -> dict:
+    """標記某分鏡的出場角色(只保留專案裡存在的角色名)。"""
+    valid = [n for n in names if project.character(n)]
+    project.shots[shot_idx].shot.characters = valid
+    return {"characters": valid}
 
 
 def select_image(project: Project, shot_idx: int, cid: str) -> dict:
@@ -74,7 +137,7 @@ def run_video_candidates(
         cid = f"v{shot_idx}_{k}"
         rel = f"shot_{shot_idx:02d}/vid_{k:02d}.mp4"
         out = pdir / rel
-        generate_clip(st.shot, image_path, out, cfg, project.costs, variant=k)
+        render_clip(st.shot, image_path, out, cfg, project.costs, st.route, variant=k)
         st.video_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="video"))
     st.selected_video = None
     st.stage = "awaiting_video_pick"

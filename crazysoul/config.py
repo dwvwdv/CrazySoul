@@ -49,6 +49,12 @@ class Config:
     cost_limit_usd: float = 0.0
     cost_retry_factor: float = 1.4
 
+    # Phase 1 Routing:動態分鏡比例上限([0,1])。
+    # 1.0=所有 needs_motion 分鏡都走付費 Video Provider;
+    # 0.0=全部退回 Motion Engine(FFmpeg zoompan,零成本);
+    # 中間值=最多這個比例的分鏡能走動態路徑,其餘退回靜態,用來壓成本。
+    dynamic_ratio: float = 1.0
+
     # 執行模式
     dry_run: bool = False
     output_root: Path = field(default_factory=lambda: Path("output"))
@@ -65,6 +71,9 @@ class Config:
             except ValueError:
                 return default
 
+        # 動態比例夾在 [0,1],避免設定錯誤造成分流異常。
+        dynamic_ratio = min(max(_num("DYNAMIC_RATIO", 1.0), 0.0), 1.0)
+
         return cls(
             llm_provider=os.environ.get("LLM_PROVIDER", "anthropic"),
             image_provider=os.environ.get("IMAGE_PROVIDER", "fal-flux"),
@@ -75,4 +84,5 @@ class Config:
             fal_key=os.environ.get("FAL_KEY") or None,
             cost_limit_usd=_num("COST_LIMIT_USD", 0.0),
             cost_retry_factor=_num("COST_RETRY_FACTOR", 1.4),
+            dynamic_ratio=dynamic_ratio,
         )

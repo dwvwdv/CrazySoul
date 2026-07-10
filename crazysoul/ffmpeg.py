@@ -48,6 +48,22 @@ def run(args: list[str]) -> None:
 WIDTH, HEIGHT, FPS = 1080, 1920, 30
 
 
+def _hue_to_hex(hue: int, sat: float = 0.55, val: float = 0.65) -> str:
+    """把色相角度轉成 ffmpeg color source 用的 0xRRGGBB 十六進位字串。
+
+    直接算出帶彩度的顏色,避免對灰底做 hue 旋轉(灰底無彩度,旋轉不會產生顏色)。
+    """
+    h = (hue % 360) / 60.0
+    c = val * sat
+    x = c * (1 - abs(h % 2 - 1))
+    m = val - c
+    r, g, b = [
+        (c, x, 0.0), (x, c, 0.0), (0.0, c, x),
+        (0.0, x, c), (x, 0.0, c), (c, 0.0, x),
+    ][int(h) % 6]
+    return "0x" + "".join(f"{round((ch + m) * 255):02X}" for ch in (r, g, b))
+
+
 def make_placeholder_image(out_path: Path, label: str, seed: int) -> None:
     """dry-run 用:產生一張純色佔位圖,代替真正的 Image Provider。
 
@@ -55,12 +71,12 @@ def make_placeholder_image(out_path: Path, label: str, seed: int) -> None:
     不同分鏡與同一分鏡的不同候選(縮圖牆挑選)。
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    hue = (seed * 47) % 360
+    color = _hue_to_hex((seed * 47) % 360)
     run(
         [
             "-f", "lavfi",
-            "-i", f"color=c=gray:s={WIDTH}x{HEIGHT}",
-            "-vf", f"hue=h={hue}:s=1.2,format=rgb24",
+            "-i", f"color=c={color}:s={WIDTH}x{HEIGHT}",
+            "-vf", "format=rgb24",
             "-frames:v", "1",
             str(out_path),
         ]
