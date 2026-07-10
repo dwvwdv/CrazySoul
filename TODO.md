@@ -10,20 +10,22 @@
 
 ## ✅ 已完成
 - [x] **Phase 0** — 打通單一路徑(LLM 分鏡 → 生圖 → 生影片 → FFmpeg 串接),CLI + dry-run
+- [x] **Phase 1** — Routing Decision:依 `needs_motion` + 動態比例上限分流(Video Provider / Motion Engine)
 - [x] **Phase 4** — Web Console 最小可用版(登入 → 批量生成 → 縮圖牆挑選 → 合成 → 保存佔位)
 - [x] 縮圖牆批量候選(Phase 3 的 `count=n` 雛形,用 variant 產生差異)
 - [x] lazyrhythm-design 基礎風格(Nord × Brutalism)
-- [x] CI(GitHub Actions,Python 3.11 / 3.12)+ 測試 29 項
+- [x] CI(GitHub Actions,Python 3.11 / 3.12)+ 測試 41 項
 
 ---
 
 ## 🔜 下一步(建議順序)
 
-### Phase 1 — Routing Decision(降成本核心,優先)
-- [ ] 依 storyboard 的 `needs_motion` 分流:需要動態 → Video Provider;靜態即可 → Motion Engine(FFmpeg zoompan,`ffmpeg.image_to_motion_clip` 已有)
-- [ ] 「動態分鏡比例」做成可調參數(config + Web UI)
-- [ ] Web Console 每個分鏡顯示走哪條路徑,並可手動覆寫
-- [ ] 測試:分流邏輯單元測試 + 混合路徑合成端到端
+### Phase 1 — Routing Decision(降成本核心,優先)✅
+- [x] 依 storyboard 的 `needs_motion` 分流:需要動態 → Video Provider;靜態即可 → Motion Engine(FFmpeg zoompan)。新增 `crazysoul/routing.py`(`decide_routes` / `render_clip`)
+- [x] 「動態分鏡比例」做成可調參數(`Config.dynamic_ratio` + env `DYNAMIC_RATIO` + CLI `--dynamic-ratio` + Web 新專案「動態比例 %」)
+- [x] Web Console 每個分鏡顯示走哪條路徑(徽章 + `needs_motion`),並可手動覆寫(`POST /shots/{idx}/route`)
+- [x] 測試:分流邏輯單元測試 + 混合路徑合成端到端(`tests/test_routing.py`)
+- [ ] 後續:路徑已鎖定(生成影片後)時,前端隱藏覆寫鈕的體驗可再優化;live 模式下 Motion Engine 與 Kling 的畫質差異需實測
 
 ### Phase 2 — Character DB(角色一致性)
 - [ ] `characters` 資料結構(名稱、參考圖、seed、風格 tag)

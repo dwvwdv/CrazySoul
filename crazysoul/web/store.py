@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from ..models import CostEntry, Shot
+from ..routing import Route
 
 # 分鏡在主線上的狀態機
 ShotStage = Literal[
@@ -40,6 +41,7 @@ class Candidate:
 class ShotState:
     shot: Shot
     stage: ShotStage = "need_images"
+    route: Route = "video"              # Phase 1 分流路徑,可由使用者手動覆寫
     image_candidates: list[Candidate] = field(default_factory=list)
     selected_image: str | None = None   # candidate id
     video_candidates: list[Candidate] = field(default_factory=list)
@@ -57,6 +59,7 @@ class Project:
     pid: str
     prompt: str
     num_shots: int
+    dynamic_ratio: float = 1.0          # Phase 1 動態分鏡比例上限
     title: str = ""
     shots: list[ShotState] = field(default_factory=list)
     costs: list[CostEntry] = field(default_factory=list)
@@ -68,6 +71,7 @@ class Project:
             "pid": self.pid,
             "prompt": self.prompt,
             "num_shots": self.num_shots,
+            "dynamic_ratio": self.dynamic_ratio,
             "title": self.title,
             "final_video": self.final_video,
             "saved_to_pcloud": self.saved_to_pcloud,
@@ -77,6 +81,8 @@ class Project:
                     "index": s.shot.index,
                     "description": s.shot.description,
                     "shot_type": s.shot.shot_type,
+                    "needs_motion": s.shot.needs_motion,
+                    "route": s.route,
                     "stage": s.stage,
                     "image_candidates": [
                         {"cid": c.cid, "url": c.url} for c in s.image_candidates
@@ -100,9 +106,11 @@ class ProjectStore:
         self._projects: dict[str, Project] = {}
         self._lock = threading.Lock()
 
-    def create(self, prompt: str, num_shots: int) -> Project:
+    def create(self, prompt: str, num_shots: int, dynamic_ratio: float = 1.0) -> Project:
         pid = uuid.uuid4().hex[:12]
-        project = Project(pid=pid, prompt=prompt, num_shots=num_shots)
+        project = Project(
+            pid=pid, prompt=prompt, num_shots=num_shots, dynamic_ratio=dynamic_ratio
+        )
         with self._lock:
             self._projects[pid] = project
         return project

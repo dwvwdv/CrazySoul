@@ -48,6 +48,12 @@
           <label for="shots">分鏡數</label>
           <input type="number" id="shots" value="3" min="1" max="8" />
         </div>
+        <div>
+          <label for="dynamic-ratio" title="最多這個比例的分鏡走付費 Video Provider,其餘用 FFmpeg Motion Engine 省成本">
+            動態比例 %
+          </label>
+          <input type="number" id="dynamic-ratio" value="100" min="0" max="100" step="10" />
+        </div>
         <button id="create-btn">產生分鏡</button>
         <span class="status-line" id="create-status"></span>
       </div>

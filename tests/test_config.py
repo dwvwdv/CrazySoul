@@ -9,7 +9,7 @@ from crazysoul.config import Config, _load_dotenv
 _ENV_KEYS = [
     "LLM_PROVIDER", "IMAGE_PROVIDER", "VIDEO_PROVIDER", "LLM_MODEL",
     "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "FAL_KEY",
-    "COST_LIMIT_USD", "COST_RETRY_FACTOR",
+    "COST_LIMIT_USD", "COST_RETRY_FACTOR", "DYNAMIC_RATIO",
 ]
 
 
@@ -28,6 +28,17 @@ def test_load_defaults(monkeypatch):
     assert cfg.cost_retry_factor == 1.4
     assert cfg.dry_run is False
     assert cfg.anthropic_api_key is None
+    assert cfg.dynamic_ratio == 1.0
+
+
+def test_dynamic_ratio_clamped(monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.setenv("DYNAMIC_RATIO", "1.5")  # 超出上限應夾回 1.0
+    assert Config.load(dotenv=None).dynamic_ratio == 1.0
+    monkeypatch.setenv("DYNAMIC_RATIO", "-0.3")  # 低於下限應夾回 0.0
+    assert Config.load(dotenv=None).dynamic_ratio == 0.0
+    monkeypatch.setenv("DYNAMIC_RATIO", "0.5")
+    assert Config.load(dotenv=None).dynamic_ratio == 0.5
 
 
 def test_load_from_env(monkeypatch):

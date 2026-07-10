@@ -11,7 +11,7 @@ from pathlib import Path
 from ..config import Config
 from ..ffmpeg import concat_clips
 from ..providers.image import generate_image
-from ..providers.video import generate_clip
+from ..routing import Route, decide_routes, render_clip
 from ..storyboard import generate_storyboard
 from .store import Candidate, Project, ShotState
 
@@ -29,8 +29,20 @@ def _media_url(pid: str, rel: str) -> str:
 def run_storyboard(cfg: Config, project: Project) -> dict:
     sb = generate_storyboard(project.prompt, cfg, project.costs, num_shots=project.num_shots)
     project.title = sb.title
-    project.shots = [ShotState(shot=s, stage="need_images") for s in sb.shots]
+    # Phase 1:依動態比例上限先算好每個分鏡的預設路徑,使用者可再手動覆寫。
+    routes = decide_routes(sb.shots, project.dynamic_ratio)
+    project.shots = [
+        ShotState(shot=s, stage="need_images", route=routes[s.index]) for s in sb.shots
+    ]
     return {"pid": project.pid, "shots": len(project.shots)}
+
+
+def set_route(project: Project, shot_idx: int, route: Route) -> dict:
+    """手動覆寫單一分鏡的分流路徑(video=動態 / motion=靜態)。"""
+    if route not in ("video", "motion"):
+        raise ValueError(f"未知路徑 {route!r}(只接受 video / motion)。")
+    project.shots[shot_idx].route = route
+    return {"route": route}
 
 
 def run_image_candidates(
@@ -74,7 +86,7 @@ def run_video_candidates(
         cid = f"v{shot_idx}_{k}"
         rel = f"shot_{shot_idx:02d}/vid_{k:02d}.mp4"
         out = pdir / rel
-        generate_clip(st.shot, image_path, out, cfg, project.costs, variant=k)
+        render_clip(st.shot, image_path, out, cfg, project.costs, st.route, variant=k)
         st.video_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="video"))
     st.selected_video = None
     st.stage = "awaiting_video_pick"

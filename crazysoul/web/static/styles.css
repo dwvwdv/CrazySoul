@@ -124,6 +124,16 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   color: var(--frost2); letter-spacing: 1px;
 }
 .shot .desc { color: var(--nord5); }
+/* Phase 1 分流徽章:動態=frost、靜態=green */
+.shot .route {
+  font-size: 11px; padding: 1px 8px; border: 1px solid currentColor;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.shot .route.video { color: var(--frost2); }
+.shot .route.motion { color: var(--green); }
+.shot .route-switch {
+  font-size: 11px; padding: 1px 8px; letter-spacing: 0;
+}
 .shot .stage {
   font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
   color: var(--yellow); margin-left: auto;

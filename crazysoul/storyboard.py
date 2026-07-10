@@ -146,12 +146,13 @@ def _dry_run_storyboard(
             detail="離線假分鏡",
         )
     )
+    # 交錯標記 needs_motion,讓 Phase 1 分流在 dry-run 也能產生混合路徑,方便驗證。
     shots = [
         Shot(
             index=i,
             description=f"{prompt} — 分鏡 {i + 1}",
             shot_type=["wide", "medium", "close"][i % 3],
-            needs_motion=True,
+            needs_motion=(i % 2 == 0),
             duration=5.0,
             motion_hint="緩慢推近",
         )

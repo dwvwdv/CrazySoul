@@ -98,6 +98,43 @@ def test_full_flow(client):
     assert client.post(f"/api/projects/{pid}/save_pcloud").json()["saved"] is True
 
 
+def test_routing_default_and_override(client):
+    client.post("/api/login", json={"password": "test-pw"})
+    # dynamic_ratio=0 → 全部分鏡預設走靜態 motion
+    r = client.post("/api/projects", json={"prompt": "分流測試", "shots": 3, "dynamic_ratio": 0})
+    pid = r.json()["pid"]
+    _wait_job(client, r.json()["job"])
+
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["dynamic_ratio"] == 0
+    assert all(s["route"] == "motion" for s in proj["shots"])
+    # 每個分鏡都帶出 needs_motion 供前端顯示
+    assert all("needs_motion" in s for s in proj["shots"])
+
+    # 手動覆寫第一個分鏡為動態 video
+    assert client.post(
+        f"/api/projects/{pid}/shots/0/route", json={"route": "video"}
+    ).json()["route"] == "video"
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["shots"][0]["route"] == "video"
+
+    # 未知路徑值應被擋
+    assert client.post(
+        f"/api/projects/{pid}/shots/0/route", json={"route": "bogus"}
+    ).status_code == 400
+
+
+def test_routing_full_ratio_follows_needs_motion(client):
+    client.post("/api/login", json={"password": "test-pw"})
+    # dynamic_ratio=1 → 依 needs_motion 分流(dry-run 交錯:0=動態,1=靜態)
+    r = client.post("/api/projects", json={"prompt": "x", "shots": 2, "dynamic_ratio": 1})
+    pid = r.json()["pid"]
+    _wait_job(client, r.json()["job"])
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["shots"][0]["route"] == "video"
+    assert proj["shots"][1]["route"] == "motion"
+
+
 def test_media_path_traversal_blocked(client):
     client.post("/api/login", json={"password": "test-pw"})
     r = client.post("/api/projects", json={"prompt": "x", "shots": 1})

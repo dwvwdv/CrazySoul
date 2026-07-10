@@ -17,7 +17,7 @@ from .config import Config
 from .ffmpeg import concat_clips
 from .models import CostEntry, RunResult, ShotResult
 from .providers.image import generate_image
-from .providers.video import generate_clip
+from .routing import decide_routes, render_clip
 from .storyboard import generate_storyboard
 
 
@@ -37,16 +37,23 @@ def run_pipeline(prompt: str, cfg: Config, num_shots: int = 3) -> RunResult:
     )
     _log(f"  → 《{storyboard.title}》共 {len(storyboard.shots)} 個分鏡")
 
-    # [3][5a] 逐分鏡生圖 + 生成影片
+    # [2] Routing Decision:依 needs_motion + 動態比例上限,決定每個分鏡走哪條路徑
+    routes = decide_routes(storyboard.shots, cfg.dynamic_ratio)
+    dyn = sum(1 for r in routes if r == "video")
+    _log(f"  → 分流:{dyn} 動態(Video Provider)/ {len(routes) - dyn} 靜態(Motion Engine)")
+
+    # [3][5] 逐分鏡生圖 + 依路徑生成影片
     shot_results: list[ShotResult] = []
     for shot in storyboard.shots:
+        route = routes[shot.index]
         _log(f"分鏡 {shot.index + 1}/{len(storyboard.shots)}:生圖…")
         image_path = generate_image(
             shot, run_dir / "images" / f"shot_{shot.index:02d}.png", cfg, costs
         )
-        _log(f"分鏡 {shot.index + 1}/{len(storyboard.shots)}:生成影片…")
-        clip_path = generate_clip(
-            shot, image_path, run_dir / "clips" / f"shot_{shot.index:02d}.mp4", cfg, costs
+        path_label = "動態 Video Provider" if route == "video" else "靜態 Motion Engine"
+        _log(f"分鏡 {shot.index + 1}/{len(storyboard.shots)}:生成影片({path_label})…")
+        clip_path = render_clip(
+            shot, image_path, run_dir / "clips" / f"shot_{shot.index:02d}.mp4", cfg, costs, route
         )
         shot_results.append(ShotResult(shot=shot, image_path=str(image_path), clip_path=str(clip_path)))
 

@@ -75,11 +75,13 @@ $("create-btn").addEventListener("click", async () => {
   const prompt = $("prompt").value.trim();
   if (!prompt) { $("create-status").textContent = "請先輸入主題。"; return; }
   const shots = parseInt($("shots").value, 10) || 3;
+  const pct = parseInt($("dynamic-ratio").value, 10);
+  const dynamic_ratio = Number.isFinite(pct) ? Math.min(1, Math.max(0, pct / 100)) : 1;
   const btn = $("create-btn");
   btn.disabled = true;
   $("create-status").textContent = "產生分鏡中…";
   try {
-    const { pid, job } = await api("POST", "/api/projects", { prompt, shots });
+    const { pid, job } = await api("POST", "/api/projects", { prompt, shots, dynamic_ratio });
     currentPid = pid;
     await pollJob(job);
     $("create-status").textContent = "";
@@ -101,8 +103,10 @@ async function loadProject() {
 function renderProject(p) {
   $("project").classList.remove("hidden");
   $("project-title").textContent = p.title || p.prompt;
+  const dynPct = Math.round((p.dynamic_ratio ?? 1) * 100);
+  const dynCount = p.shots.filter((s) => s.route === "video").length;
   $("project-meta").textContent =
-    `${p.shots.length} 個分鏡 · 估算成本 $${p.total_cost_usd}`;
+    `${p.shots.length} 個分鏡 · 動態上限 ${dynPct}%(${dynCount} 動態 / ${p.shots.length - dynCount} 靜態）· 估算成本 $${p.total_cost_usd}`;
 
   const container = $("shots-container");
   container.innerHTML = "";
@@ -128,10 +132,20 @@ function renderShot(s) {
     done: "已完成",
   }[s.stage] || s.stage;
 
+  // Phase 1:分流路徑徽章 + 手動覆寫(video=動態付費 / motion=靜態省成本)
+  const isVideo = s.route === "video";
+  const routeLabel = isVideo ? "動態 · Video" : "靜態 · Motion";
+  const otherRoute = isVideo ? "motion" : "video";
+  const switchLabel = isVideo ? "改走靜態" : "改走動態";
+  // 已開始生成影片後就鎖定路徑,避免與既有候選不一致
+  const routeLocked = ["awaiting_video_pick", "done"].includes(s.stage);
+
   wrap.innerHTML = `
     <div class="shot-head">
       <span class="idx">分鏡 ${s.index + 1}</span>
       <span class="idx">${s.shot_type}</span>
+      <span class="route ${isVideo ? "video" : "motion"}" title="needs_motion=${s.needs_motion}">${routeLabel}</span>
+      ${routeLocked ? "" : `<button class="ghost route-switch" data-act="set-route" data-idx="${s.index}" data-route="${otherRoute}">${switchLabel}</button>`}
       <span class="stage ${s.stage === "done" ? "done" : ""}">${stageLabel}</span>
     </div>
     <div class="desc">${s.description}</div>
@@ -215,6 +229,9 @@ $("shots-container").addEventListener("click", async (e) => {
     } else if (act === "pick-image" || act === "pick-video") {
       const kind = act === "pick-image" ? "select_image" : "select_video";
       await api("POST", `/api/projects/${currentPid}/shots/${idx}/${kind}`, { cid: t.dataset.cid });
+      await loadProject();
+    } else if (act === "set-route") {
+      await api("POST", `/api/projects/${currentPid}/shots/${idx}/route`, { route: t.dataset.route });
       await loadProject();
     }
   } catch (err) {

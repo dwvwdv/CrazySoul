@@ -31,6 +31,7 @@ class LoginBody(BaseModel):
 class CreateProjectBody(BaseModel):
     prompt: str
     shots: int = 3
+    dynamic_ratio: float | None = None  # None = 用伺服器預設(cfg.dynamic_ratio)
 
 
 class CountBody(BaseModel):
@@ -39,6 +40,10 @@ class CountBody(BaseModel):
 
 class PickBody(BaseModel):
     cid: str
+
+
+class RouteBody(BaseModel):
+    route: str  # "video"(動態)/ "motion"(靜態)
 
 
 def make_config() -> Config:
@@ -91,7 +96,9 @@ def create_app() -> FastAPI:
     # ---- 專案 / 主線 ----
     @app.post("/api/projects", dependencies=[Depends(require_auth)])
     def create_project(body: CreateProjectBody):
-        project = store.create(body.prompt.strip(), max(1, min(body.shots, 8)))
+        ratio = cfg.dynamic_ratio if body.dynamic_ratio is None else body.dynamic_ratio
+        ratio = min(max(ratio, 0.0), 1.0)
+        project = store.create(body.prompt.strip(), max(1, min(body.shots, 8)), ratio)
         job = jobs.submit("storyboard", lambda: service.run_storyboard(cfg, project))
         return {"pid": project.pid, "job": job.jid}
 
@@ -122,6 +129,13 @@ def create_app() -> FastAPI:
         try:
             return service.select_image(_project(pid), idx, body.cid)
         except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.post("/api/projects/{pid}/shots/{idx}/route", dependencies=[Depends(require_auth)])
+    def set_route(pid: str, idx: int, body: RouteBody):
+        try:
+            return service.set_route(_project(pid), idx, body.route)  # type: ignore[arg-type]
+        except (ValueError, IndexError) as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
     @app.post("/api/projects/{pid}/shots/{idx}/videos", dependencies=[Depends(require_auth)])
