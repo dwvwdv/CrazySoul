@@ -41,24 +41,24 @@
 - [ ] 背景音樂上傳 / 選配
 - [ ] 字幕時間軸(Whisper 對齊)
 - [ ] Web Console:配樂/配音步驟 + 試聽
-- [ ] Composition Engine 疊音軌 + 燒字幕
+- [x] Composition Engine 疊音軌 + 燒字幕
 
 ### Phase 6 — 延伸(Extend)與 pCloud
-- [ ] Video Provider 加 `extend()`(5 秒為單位延長)
-- [ ] Web Console:選定影片後「是否延伸」選項
-- [ ] pCloud WebDAV 實際上傳(取代目前保存佔位)
+- [x] Video Provider 加 `extend()`(5 秒為單位延長)
+- [x] Web Console:選定影片後「是否延伸」選項
+- [x] pCloud WebDAV 實際上傳(取代目前保存佔位)
 
 ### Phase 7 — 成本與重試治理
 - [ ] 呼叫前檢查當日/當月預算上限(目前只有單次 run 雛形 `_check_budget`)
 - [ ] 失敗自動重試(上限次數)+ 成本計入(×1.3~1.5 係數)
 - [ ] 定期把各 Provider 實際單價寫回設定檔
-- [ ] Web Console 成本儀表板
+- [x] Web Console 成本儀表板
 
 ### Phase 8 — Docker 化與部署
-- [ ] 拆 `web-frontend` / `web-backend` / `worker` 三容器
-- [ ] `docker-compose.yml` + `.env`
+- [x] 拆 `web-frontend` / `web-backend` / `worker` 三容器
+- [x] `docker-compose.yml` + `.env`
 - [ ] 接既有 Cloudflare Tunnel → HostDzire VPS
-- [ ] worker 與 backend 分開(長任務不卡 API)
+- [x] worker 與 backend 分開(長任務不卡 API)
 
 ### Phase 9 — 排程與觸發
 - [ ] 視需求接 n8n(定時產出 / Webhook 觸發)

@@ -117,6 +117,55 @@ def normalize_clip(src: Path, out_path: Path, duration: float | None = None) -> 
     run([*args, str(out_path)])
 
 
+def silent_audio(out_path: Path, duration: float) -> None:
+    """Create a silent AAC track for dry-run narration placeholders."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    run([
+        "-f", "lavfi",
+        "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-t", f"{duration:.3f}",
+        "-c:a", "aac",
+        str(out_path),
+    ])
+
+
+def add_audio_subtitles(
+    video_path: Path,
+    audio_path: Path | None,
+    subtitles_path: Path | None,
+    out_path: Path,
+) -> None:
+    """Add optional audio and burned-in subtitles to a video."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    args = ["-i", str(video_path)]
+    if audio_path is not None:
+        args += ["-i", str(audio_path)]
+    vf = []
+    if subtitles_path is not None:
+        escaped = str(subtitles_path.resolve()).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+        vf.append(f"subtitles='{escaped}'")
+    if vf:
+        args += ["-vf", ",".join(vf)]
+    args += ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
+    if audio_path is not None:
+        args += ["-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-shortest"]
+    else:
+        args += ["-an"]
+    run([*args, str(out_path)])
+
+
+def extend_clip(src: Path, out_path: Path, extra_seconds: float) -> None:
+    """Extend a clip by freezing its last frame."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    run([
+        "-i", str(src),
+        "-vf", f"tpad=stop_mode=clone:stop_duration={extra_seconds:.3f}",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        str(out_path),
+    ])
+
+
 def concat_clips(clips: list[Path], out_path: Path) -> None:
     """把多個標準化後的片段硬串接成最終影片(Composition Engine 的核心)。"""
     if not clips:

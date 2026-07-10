@@ -62,6 +62,9 @@ class Project:
     costs: list[CostEntry] = field(default_factory=list)
     final_video: str | None = None      # /media URL
     saved_to_pcloud: bool = False
+    voiceover: str | None = None
+    subtitles: str | None = None
+    final_with_audio: str | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -71,6 +74,9 @@ class Project:
             "title": self.title,
             "final_video": self.final_video,
             "saved_to_pcloud": self.saved_to_pcloud,
+            "voiceover": self.voiceover,
+            "subtitles": self.subtitles,
+            "final_with_audio": self.final_with_audio,
             "total_cost_usd": round(sum(c.unit_cost_usd for c in self.costs), 4),
             "shots": [
                 {
@@ -78,6 +84,8 @@ class Project:
                     "description": s.shot.description,
                     "shot_type": s.shot.shot_type,
                     "stage": s.stage,
+                    "needs_motion": s.shot.needs_motion,
+                    "route": "video-provider" if s.shot.needs_motion else "motion-engine",
                     "image_candidates": [
                         {"cid": c.cid, "url": c.url} for c in s.image_candidates
                     ],

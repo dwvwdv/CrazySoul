@@ -77,3 +77,14 @@ def _upload_image(image_path: Path, fal_key: str) -> str:
         )
         resp.raise_for_status()
         return resp.json()["url"]
+
+
+def extend_clip(clip_path: Path, out_path: Path, cfg: Config, costs: list[CostEntry], seconds: float = 5.0) -> Path:
+    """Extend a generated clip. Dry-run freezes the last frame; live provider support is pending."""
+    if seconds <= 0:
+        raise ValueError("延伸秒數必須大於 0。")
+    if cfg.dry_run:
+        ffmpeg.extend_clip(clip_path, out_path, seconds)
+        costs.append(CostEntry("video_extend", "dry-run(ffmpeg-freeze)", 0.0, f"+{seconds:.1f}s"))
+        return out_path
+    raise NotImplementedError("目前尚未接入 live Video Provider extend()。")

@@ -41,6 +41,14 @@ class PickBody(BaseModel):
     cid: str
 
 
+class AudioBody(BaseModel):
+    narration: str | None = None
+
+
+class ExtendBody(BaseModel):
+    seconds: float = 5.0
+
+
 def make_config() -> Config:
     cfg = Config.load()
     flag = os.environ.get("CRAZYSOUL_DRY_RUN", "").strip().lower()
@@ -140,6 +148,12 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
+    @app.post("/api/projects/{pid}/shots/{idx}/extend", dependencies=[Depends(require_auth)])
+    def extend_video(pid: str, idx: int, body: ExtendBody):
+        project = _project(pid)
+        job = jobs.submit("extend", lambda: service.run_extend_video(cfg, project, idx, body.seconds))
+        return {"job": job.jid}
+
     @app.post("/api/projects/{pid}/compose", dependencies=[Depends(require_auth)])
     def compose(pid: str):
         project = _project(pid)
@@ -149,9 +163,19 @@ def create_app() -> FastAPI:
     @app.post("/api/projects/{pid}/save_pcloud", dependencies=[Depends(require_auth)])
     def save_pcloud(pid: str):
         try:
-            return service.save_to_pcloud(_project(pid))
-        except ValueError as exc:
+            return service.save_to_pcloud(_project(pid), cfg)
+        except (ValueError, RuntimeError) as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.post("/api/projects/{pid}/audio_subtitles", dependencies=[Depends(require_auth)])
+    def audio_subtitles(pid: str, body: AudioBody):
+        project = _project(pid)
+        job = jobs.submit("audio_subtitles", lambda: service.run_audio_subtitles(cfg, project, body.narration))
+        return {"job": job.jid}
+
+    @app.get("/api/projects/{pid}/costs", dependencies=[Depends(require_auth)])
+    def costs(pid: str):
+        return service.cost_dashboard(_project(pid))
 
     @app.get("/api/jobs/{jid}", dependencies=[Depends(require_auth)])
     def job_status(jid: str):

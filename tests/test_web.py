@@ -94,8 +94,27 @@ def test_full_flow(client):
     assert proj["final_video"]
     assert client.get(proj["final_video"]).status_code == 200
 
-    # 保存至 pCloud(Phase 6 前先標記)
-    assert client.post(f"/api/projects/{pid}/save_pcloud").json()["saved"] is True
+    # Phase 6:延伸選定影片
+    job = client.post(f"/api/projects/{pid}/shots/0/extend", json={"seconds": 1}).json()["job"]
+    _wait_job(client, job)
+
+    # Phase 5:自動產生 dry-run 配音與字幕,並燒進影片
+    job = client.post(
+        f"/api/projects/{pid}/audio_subtitles", json={"narration": "雨中的紅傘"}
+    ).json()["job"]
+    _wait_job(client, job)
+    proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["final_with_audio"]
+    assert client.get(proj["final_with_audio"]).status_code == 200
+
+    # Phase 7:成本儀表板
+    costs = client.get(f"/api/projects/{pid}/costs").json()
+    assert "by_stage" in costs
+
+    # Phase 6:pCloud dry-run 上傳
+    saved = client.post(f"/api/projects/{pid}/save_pcloud").json()
+    assert saved["saved"] is True
+    assert saved["dry_run"] is True
 
 
 def test_media_path_traversal_blocked(client):

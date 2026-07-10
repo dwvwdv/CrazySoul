@@ -48,6 +48,13 @@ class Config:
     # 成本護欄(Phase 7 完整實作,先放參數)
     cost_limit_usd: float = 0.0
     cost_retry_factor: float = 1.4
+    retry_max_attempts: int = 2
+
+    # pCloud WebDAV(Phase 6)
+    pcloud_user: str | None = None
+    pcloud_password: str | None = None
+    pcloud_webdav_url: str = "https://webdav.pcloud.com"
+    pcloud_folder: str = "CrazySoul"
 
     # 執行模式
     dry_run: bool = False
@@ -75,4 +82,9 @@ class Config:
             fal_key=os.environ.get("FAL_KEY") or None,
             cost_limit_usd=_num("COST_LIMIT_USD", 0.0),
             cost_retry_factor=_num("COST_RETRY_FACTOR", 1.4),
+            retry_max_attempts=int(_num("RETRY_MAX_ATTEMPTS", 2)),
+            pcloud_user=os.environ.get("PCLOUD_USER") or None,
+            pcloud_password=os.environ.get("PCLOUD_PASSWORD") or None,
+            pcloud_webdav_url=os.environ.get("PCLOUD_WEBDAV_URL", "https://webdav.pcloud.com"),
+            pcloud_folder=os.environ.get("PCLOUD_FOLDER", "CrazySoul"),
         )

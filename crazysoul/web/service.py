@@ -9,9 +9,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import Config
-from ..ffmpeg import concat_clips
+from ..ffmpeg import concat_clips, image_to_motion_clip
+from ..audio import compose_audio_subtitles, make_srt, synthesize_voice
+from ..pcloud import upload_file
 from ..providers.image import generate_image
-from ..providers.video import generate_clip
+from ..providers.video import extend_clip, generate_clip
 from ..storyboard import generate_storyboard
 from .store import Candidate, Project, ShotState
 
@@ -74,7 +76,10 @@ def run_video_candidates(
         cid = f"v{shot_idx}_{k}"
         rel = f"shot_{shot_idx:02d}/vid_{k:02d}.mp4"
         out = pdir / rel
-        generate_clip(st.shot, image_path, out, cfg, project.costs, variant=k)
+        if st.shot.needs_motion:
+            generate_clip(st.shot, image_path, out, cfg, project.costs, variant=k)
+        else:
+            image_to_motion_clip(image_path, out, st.shot.duration, variant=k)
         st.video_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="video"))
     st.selected_video = None
     st.stage = "awaiting_video_pick"
@@ -105,10 +110,55 @@ def run_compose(cfg: Config, project: Project) -> dict:
     return {"final_video": project.final_video}
 
 
-def save_to_pcloud(project: Project) -> dict:
-    """Phase 0/4:「保存至 pCloud」為主要動作。實際 WebDAV 上傳留待 Phase 6,
-    這裡先標記完成,讓主流程走得通(README:先跑通,再抽象)。"""
+def run_audio_subtitles(cfg: Config, project: Project, narration: str | None = None) -> dict:
+    if not project.final_video:
+        raise ValueError("尚未合成最終影片。")
+    pdir = project_dir(cfg, project.pid)
+    text = narration or project.prompt
+    voice_rel = "audio/voiceover.m4a"
+    sub_rel = "subtitles/captions.srt"
+    out_rel = "final_with_audio.mp4"
+    voice = synthesize_voice(text, pdir / voice_rel, cfg, project.costs)
+    duration = sum(s.shot.duration for s in project.shots) or 5.0
+    subs = make_srt(text, pdir / sub_rel, duration)
+    compose_audio_subtitles(pdir / project.final_video.split(f"/media/{project.pid}/", 1)[1], voice, subs, pdir / out_rel)
+    project.voiceover = _media_url(project.pid, voice_rel)
+    project.subtitles = _media_url(project.pid, sub_rel)
+    project.final_with_audio = _media_url(project.pid, out_rel)
+    return {"voiceover": project.voiceover, "subtitles": project.subtitles, "final_video": project.final_with_audio}
+
+
+def run_extend_video(cfg: Config, project: Project, shot_idx: int, seconds: float = 5.0) -> dict:
+    st = project.shots[shot_idx]
+    cand = st.selected_video_cand()
+    if cand is None:
+        raise ValueError("尚未選定影片,無法延伸。")
+    pdir = project_dir(cfg, project.pid)
+    src_rel = cand.url.split(f"/media/{project.pid}/", 1)[1]
+    rel = f"shot_{shot_idx:02d}/extended_{len(st.video_candidates):02d}.mp4"
+    extend_clip(pdir / src_rel, pdir / rel, cfg, project.costs, seconds=seconds)
+    cid = f"v{shot_idx}_ext{len(st.video_candidates)}"
+    st.video_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="video"))
+    st.selected_video = cid
+    st.stage = "done"
+    return {"selected": cid, "url": _media_url(project.pid, rel)}
+
+
+def cost_dashboard(project: Project) -> dict:
+    by_stage: dict[str, float] = {}
+    for c in project.costs:
+        by_stage[c.stage] = round(by_stage.get(c.stage, 0.0) + c.unit_cost_usd, 4)
+    return {"total_cost_usd": round(sum(by_stage.values()), 4), "by_stage": by_stage, "entries": [c.to_dict() for c in project.costs]}
+
+
+def save_to_pcloud(project: Project, cfg: Config | None = None) -> dict:
+    """Upload the composed video to pCloud WebDAV, or mark dry-run saves."""
     if not project.final_video:
         raise ValueError("尚未合成最終影片。")
     project.saved_to_pcloud = True
-    return {"saved": True, "note": "pCloud WebDAV 實際上傳留待 Phase 6"}
+    if cfg is None:
+        return {"saved": True, "note": "pCloud WebDAV 未提供設定；只標記保存。"}
+    pdir = project_dir(cfg, project.pid)
+    rel = (project.final_with_audio or project.final_video).split(f"/media/{project.pid}/", 1)[1]
+    upload = upload_file(pdir / rel, f"{project.pid}.mp4", cfg)
+    return {"saved": True, **upload}

@@ -1,0 +1,23 @@
+services:
+  web-backend:
+    build: .
+    command: python -m crazysoul.web
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./output:/app/output
+  worker:
+    build: .
+    command: python -m crazysoul.cli --help
+    env_file: .env
+    volumes:
+      - ./output:/app/output
+  web-frontend:
+    image: nginx:1.27-alpine
+    depends_on:
+      - web-backend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./crazysoul/web/static:/usr/share/nginx/html:ro
