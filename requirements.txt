@@ -1,0 +1,15 @@
+# Phase 0 依賴。dry-run 模式只需要 imageio-ffmpeg(或系統 ffmpeg),
+# 其餘套件在實際呼叫 Provider 時才會 import,缺套件會給出明確錯誤。
+
+# LLM 分鏡產生(擇一,預設 Anthropic)
+anthropic>=0.40.0
+
+# Provider HTTP 呼叫(fal.ai 等)
+httpx>=0.27.0
+
+# FFmpeg:優先用系統安裝的 ffmpeg;若無則用這個 bundled binary
+imageio-ffmpeg>=0.5.1
+
+# Web Console(Phase 4):FastAPI 後端 + 內嵌 SPA,不需要前端 build 工具鏈
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0

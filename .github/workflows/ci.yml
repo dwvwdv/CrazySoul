@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [master]   # 合併後在 master 上跑
+  pull_request:          # 每個 PR(及其後續 push)跑一次,避免功能分支重複觸發
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      # 測試全程 dry-run,ffmpeg 用 imageio-ffmpeg 內建 binary,不需要 apt 安裝
+      - name: Show ffmpeg
+        run: |
+          python -c "import imageio_ffmpeg, subprocess; p=imageio_ffmpeg.get_ffmpeg_exe(); print(subprocess.run([p,'-version'],capture_output=True,text=True).stdout.splitlines()[0])"
+
+      # 用 python -m pytest,確保 pytest 跑在 pip 安裝的同一個直譯器上
+      - name: Run tests
+        run: python -m pytest -q

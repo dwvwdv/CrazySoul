@@ -216,3 +216,102 @@ Prompt / 主題
 - **不在 Phase 0 就設計完美的 Provider 抽象層**:先跑通一家,再抽象,避免脫離現實的過度設計。
 - **不省略重試成本估算**:預算永遠抓實際單價 × 1.3~1.5,不要用官方報價當最終成本。
 - **不做多使用者權限系統**:單人使用的內部工具,Web Console 不需要角色權限、多租戶這類設計,頂多加一層簡單密碼或 IP 白名單。
+
+---
+
+## 快速開始(Phase 0)
+
+> 開發待辦見 [`TODO.md`](TODO.md)(單一事實來源);開發流程與慣例見 [`CLAUDE.md`](CLAUDE.md)。
+
+目前實作到 **Phase 0:打通單一路徑**——LLM 出分鏡 → 生圖 → 生成影片(先不分流)→ FFmpeg 硬串接 → 產出最終 MP4。以 CLI 驗證資料流,尚無 Web UI。
+
+### 安裝
+
+```bash
+pip install -r requirements.txt
+```
+
+`imageio-ffmpeg` 會附帶一個 ffmpeg binary;若系統已裝 ffmpeg 會優先使用系統版本。
+
+### 離線試跑(dry-run,不花錢、不連網)
+
+不需要任何憑證,用 FFmpeg 佔位素材(純色圖 + zoompan 運鏡)驗證整條資料流:
+
+```bash
+python -m crazysoul.cli --prompt "深夜便利商店的貓" --dry-run --shots 3
+```
+
+產物落在 `output/<時間戳>/`:`storyboard.json`、`images/`、`clips/`、`final.mp4`、`cost_log.json`。
+
+### 實際生成(需憑證)
+
+複製 `.env.example` 成 `.env` 填入金鑰(`ANTHROPIC_API_KEY`、`FAL_KEY`),然後:
+
+```bash
+python -m crazysoul.cli --prompt "深夜便利商店的貓" --shots 4
+```
+
+- 分鏡:Anthropic Opus 4.8(structured outputs 強制輸出合法 JSON)
+- 生圖:Flux via fal.ai
+- 生成影片:Kling via fal.ai(image-to-video)
+
+### 測試 / CI
+
+```bash
+pip install -r requirements-dev.txt
+pytest        # 全程 dry-run,只需要 ffmpeg,不需要憑證或網路
+```
+
+每次 push 與 PR 由 GitHub Actions(`.github/workflows/ci.yml`)在 Python 3.11 / 3.12 上跑整套測試;ffmpeg 用 `imageio-ffmpeg` 內建 binary,CI 不需要另外 apt 安裝。測試涵蓋:分鏡建構、Provider(dry-run)、FFmpeg 串接的端到端管線、Web Console 主線(登入 → 生成 → 挑選 → 合成)、身分驗證與簽章 cookie、設定載入、非同步任務、成本護欄,以及媒體端點的目錄穿越防護。
+
+### 程式結構(對應上面的模組編號)
+
+| 檔案 | 對應模組 |
+|---|---|
+| `crazysoul/storyboard.py` | [1] Storyboard Generator |
+| `crazysoul/providers/image.py` | [3] Image Provider Layer(Flux) |
+| `crazysoul/providers/video.py` | [5a] Video Provider Layer(Kling) |
+| `crazysoul/ffmpeg.py` | [5b] Motion Engine + [7] Composition Engine |
+| `crazysoul/pipeline.py` | Phase 0 編排 |
+| `crazysoul/config.py` | 憑證 / 成本護欄設定 |
+| `crazysoul/web/` | [0] Web Console(Phase 4) |
+
+---
+
+## Web Console(Phase 4,最小可用版)
+
+把 Phase 0 管線包成非同步任務,提供人機協作介面:**批量生成 → 縮圖牆挑選 → 下一步**。前端由 FastAPI 直接內嵌 SPA(原生 HTML/JS),不需要額外的 build 工具鏈。
+
+### 啟動
+
+```bash
+# 離線 dry-run(用 FFmpeg 佔位素材,不呼叫付費 API),預設密碼 crazysoul
+CRAZYSOUL_DRY_RUN=1 python -m crazysoul.web
+# 開瀏覽器到 http://127.0.0.1:8000
+
+# 實際生成:設好 .env 的金鑰後
+python -m crazysoul.web
+```
+
+環境變數:
+
+| 變數 | 說明 |
+|---|---|
+| `WEB_PASSWORD` / `WEB_PASSWORD_HASH` | 登入密碼(明文或 sha256 hex);未設定用開發預設 `crazysoul` |
+| `WEB_SECRET_KEY` | cookie 簽章金鑰;未設定則每次啟動隨機(重啟後需重新登入) |
+| `CRAZYSOUL_DRY_RUN=1` | 離線模式 |
+| `CRAZYSOUL_WEB_HOST` / `_PORT` | 綁定位址(預設 `127.0.0.1:8000`) |
+
+### 主線流程
+
+1. 單一密碼登入(環境變數存密碼、無帳號系統)。
+2. 輸入主題 → 產生分鏡。
+3. 每個分鏡「一次生成 n 張圖」→ 縮圖牆 → **點選一張**(選中用 frost1 邊框)。
+4. 針對選中的圖「一次生成 n 段影片」→ 逐一預覽 → **點選一段**。
+5. 全部分鏡選完 → 合成最終影片 → **保存至 pCloud**(實際 WebDAV 上傳留待 Phase 6);「發布至 YouTube Shorts」為 Coming Soon 佔位(disabled)。
+
+視覺風格套用 `lazyrhythm-design` 基礎版(Nord × Brutalism,冷色調 + 偏移硬陰影 + frost 藍強調)。每個生成節點都是非同步任務,前端輪詢 `/api/jobs/{id}` 直到完成。
+
+> 尚未實作(照 README 階段順序往後做):Routing Decision(Phase 1)、Character DB(Phase 2)、Provider 抽象與批量 count=n 的正式介面(Phase 3)、音訊字幕(Phase 5)、影片延伸 Extend 與 pCloud 實際上傳(Phase 6)、成本治理儀表板(Phase 7)、Docker 化部署(Phase 8)、YouTube Shorts 實作(Phase 10)。
+>
+> Web Console 目前為 Phase 4 最小可用版:主線可跑通,批量圖片候選已支援(Phase 3 的 `count=n` 雛形),但 Provider 尚未包成正式統一介面,配樂/配音(Phase 5)也還沒接。

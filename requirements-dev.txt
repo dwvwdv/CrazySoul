@@ -1,0 +1,3 @@
+# 開發 / CI 用依賴(在 requirements.txt 之外)
+-r requirements.txt
+pytest>=8.0.0

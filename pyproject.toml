@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# 讓 `pytest`(console script)也能 import 到 repo 根目錄的 crazysoul 套件,
+# 不必倚賴 `python -m pytest` 才會把 cwd 加進 sys.path。
+pythonpath = ["."]
+testpaths = ["tests"]

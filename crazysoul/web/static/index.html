@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CrazySoul Web Console</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>CrazySoul</h1>
+    <span class="tag">Web Console</span>
+    <span class="tag" id="mode-tag"></span>
+    <span class="spacer"></span>
+    <button id="logout-btn" class="ghost hidden">登出</button>
+  </header>
+
+  <!-- 登入畫面 -->
+  <main id="login-view" class="hidden">
+    <div class="card login-wrap">
+      <h2>登入</h2>
+      <p class="muted">單一密碼登入(無帳號系統)。</p>
+      <label for="pw">密碼</label>
+      <input type="password" id="pw" autocomplete="current-password" />
+      <div style="margin-top:16px">
+        <button id="login-btn">進入</button>
+      </div>
+      <div class="status-line error" id="login-error" style="margin-top:10px"></div>
+    </div>
+  </main>
+
+  <!-- 主畫面 -->
+  <main id="app-view" class="hidden">
+    <div id="warn-banner" class="banner warn hidden">
+      正在使用開發預設密碼,正式部署請設定 <code>WEB_PASSWORD</code> 或 <code>WEB_PASSWORD_HASH</code>。
+    </div>
+    <div id="dry-banner" class="banner dry hidden">
+      DRY-RUN 離線模式:用 FFmpeg 佔位素材,不呼叫任何付費 API。
+    </div>
+
+    <!-- 新專案 -->
+    <div class="card">
+      <h2>新影片</h2>
+      <label for="prompt">主題 / 大綱</label>
+      <textarea id="prompt" placeholder="例:深夜便利商店裡打烊前的一隻貓"></textarea>
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label for="shots">分鏡數</label>
+          <input type="number" id="shots" value="3" min="1" max="8" />
+        </div>
+        <button id="create-btn">產生分鏡</button>
+        <span class="status-line" id="create-status"></span>
+      </div>
+    </div>
+
+    <!-- 專案主線 -->
+    <div id="project" class="card hidden">
+      <h2 id="project-title"></h2>
+      <div class="muted" id="project-meta"></div>
+      <div id="shots-container"></div>
+
+      <div id="finalize" class="hidden" style="margin-top:20px; border-top: var(--border); padding-top:16px">
+        <button id="compose-btn">合成最終影片</button>
+        <span class="status-line" id="compose-status"></span>
+        <div id="final-block" class="final hidden" style="margin-top:16px">
+          <video id="final-video" controls></video>
+          <div class="row" style="margin-top:12px">
+            <button id="save-btn">保存至 pCloud</button>
+            <button class="secondary coming-soon" disabled>發布至 YouTube Shorts</button>
+            <span class="status-line" id="save-status"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
