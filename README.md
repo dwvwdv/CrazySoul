@@ -221,6 +221,8 @@ Prompt / 主題
 
 ## 快速開始(Phase 0)
 
+> 開發待辦見 [`TODO.md`](TODO.md)(單一事實來源);開發流程與慣例見 [`CLAUDE.md`](CLAUDE.md)。
+
 目前實作到 **Phase 0:打通單一路徑**——LLM 出分鏡 → 生圖 → 生成影片(先不分流)→ FFmpeg 硬串接 → 產出最終 MP4。以 CLI 驗證資料流,尚無 Web UI。
 
 ### 安裝
