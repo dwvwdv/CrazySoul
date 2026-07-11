@@ -59,6 +59,14 @@ class ShotCharactersBody(BaseModel):
     names: list[str] = []
 
 
+class SubtitleBody(BaseModel):
+    text: str = ""
+
+
+class ExtendBody(BaseModel):
+    seconds: float = 5.0
+
+
 def make_config() -> Config:
     cfg = Config.load()
     flag = os.environ.get("CRAZYSOUL_DRY_RUN", "").strip().lower()
@@ -198,16 +206,41 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
+    @app.post("/api/projects/{pid}/background_music", dependencies=[Depends(require_auth)])
+    async def upload_background_music(pid: str, file: UploadFile = File(...)):
+        data = await file.read()
+        suffix = Path(file.filename or "music.mp3").suffix or ".mp3"
+        try:
+            return service.save_background_music(cfg, _project(pid), data, suffix)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.post("/api/projects/{pid}/shots/{idx}/extend", dependencies=[Depends(require_auth)])
+    def extend_video(pid: str, idx: int, body: ExtendBody):
+        try:
+            seconds = min(max(body.seconds, 1.0), 15.0)
+            return service.extend_selected_video(cfg, _project(pid), idx, seconds)
+        except (ValueError, IndexError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.post("/api/projects/{pid}/subtitles", dependencies=[Depends(require_auth)])
+    def set_subtitles(pid: str, body: SubtitleBody):
+        return service.set_subtitle_text(_project(pid), body.text)
+
     @app.post("/api/projects/{pid}/compose", dependencies=[Depends(require_auth)])
     def compose(pid: str):
         project = _project(pid)
         job = jobs.submit("compose", lambda: service.run_compose(cfg, project))
         return {"job": job.jid}
 
+    @app.get("/api/projects/{pid}/costs", dependencies=[Depends(require_auth)])
+    def costs(pid: str):
+        return service.cost_summary(cfg, _project(pid))
+
     @app.post("/api/projects/{pid}/save_pcloud", dependencies=[Depends(require_auth)])
     def save_pcloud(pid: str):
         try:
-            return service.save_to_pcloud(_project(pid))
+            return service.save_to_pcloud(cfg, _project(pid))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 

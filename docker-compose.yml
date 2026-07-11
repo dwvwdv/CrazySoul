@@ -1,0 +1,35 @@
+services:
+  web-backend:
+    build: .
+    env_file: .env
+    environment:
+      CRAZYSOUL_OUTPUT: /data/output
+    volumes:
+      - crazysoul-output:/data/output
+    ports:
+      - "8000:8000"
+    command: ["python", "-m", "crazysoul.web"]
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      CRAZYSOUL_OUTPUT: /data/output
+      CRAZYSOUL_WORKER: "1"
+    volumes:
+      - crazysoul-output:/data/output
+    command: ["python", "-m", "crazysoul.web"]
+    profiles: ["worker"]
+
+  web-frontend:
+    build: .
+    env_file: .env
+    depends_on:
+      - web-backend
+    ports:
+      - "8080:8000"
+    command: ["python", "-m", "crazysoul.web"]
+    profiles: ["frontend"]
+
+volumes:
+  crazysoul-output:

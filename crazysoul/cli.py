@@ -35,6 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--output", "-o", default="output", help="產物根目錄(預設 output/)。")
     p.add_argument("--voiceover", default=None, help="Phase 5:要合成到影片中的 TTS 旁白文字。")
+    p.add_argument("--background-music", default=None, help="Phase 5:要混入影片的本機背景音樂檔。")
+    p.add_argument("--subtitles", default=None, help="Phase 5:要燒進影片的字幕文字。")
     return p
 
 
@@ -50,7 +52,14 @@ def main(argv: list[str] | None = None) -> int:
     cfg.output_root = Path(args.output)
 
     try:
-        run_pipeline(args.prompt, cfg, num_shots=args.shots, voiceover_text=args.voiceover)
+        run_pipeline(
+            args.prompt,
+            cfg,
+            num_shots=args.shots,
+            voiceover_text=args.voiceover,
+            background_music=args.background_music,
+            subtitle_text=args.subtitles,
+        )
     except Exception as exc:  # noqa: BLE001 - CLI 邊界,給使用者清楚訊息
         print(f"[crazysoul] 錯誤:{exc}", file=sys.stderr)
         return 1

@@ -11,6 +11,8 @@ import time
 
 import pytest
 
+from crazysoul.ffmpeg import run as ffmpeg_run
+
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
@@ -25,6 +27,16 @@ def client(tmp_path, monkeypatch):
 
     with TestClient(create_app()) as c:
         yield c
+
+
+def _make_test_music(path):
+    ffmpeg_run([
+        "-f", "lavfi",
+        "-i", "sine=frequency=330:sample_rate=44100:duration=2",
+        "-c:a", "pcm_s16le",
+        str(path),
+    ])
+    return path
 
 
 def _wait_job(client, jid, timeout=60):
@@ -50,7 +62,7 @@ def test_login_wrong_password(client):
     assert client.post("/api/login", json={"password": "nope"}).status_code == 401
 
 
-def test_full_flow(client):
+def test_full_flow(client, tmp_path):
     # 登入
     assert client.post("/api/login", json={"password": "test-pw"}).status_code == 200
     assert client.get("/api/me").json()["authed"] is True
@@ -83,18 +95,41 @@ def test_full_flow(client):
         vids = proj["shots"][idx]["video_candidates"]
         assert len(vids) == 2
         client.post(f"/api/projects/{pid}/shots/{idx}/select_video", json={"cid": vids[0]["cid"]})
+        if idx == 0:
+            resp = client.post(f"/api/projects/{pid}/shots/{idx}/extend", json={"seconds": 5})
+            resp.raise_for_status()
+            assert resp.json()["extended"] is True
 
     proj = client.get(f"/api/projects/{pid}").json()
     assert proj["all_done"] is True
 
-    # 合成最終影片
+    # 上傳背景音樂後合成最終影片
+    music = _make_test_music(tmp_path / "music.wav")
+    with music.open("rb") as fh:
+        resp = client.post(
+            f"/api/projects/{pid}/background_music",
+            files={"file": ("music.wav", fh, "audio/wav")},
+        )
+    resp.raise_for_status()
+    assert resp.json()["background_music"].endswith("/audio/background_music.wav")
+    resp = client.post(f"/api/projects/{pid}/subtitles", json={"text": "第一句字幕。第二句字幕。"})
+    resp.raise_for_status()
+    assert resp.json()["subtitle_text"].startswith("第一句")
+
     job = client.post(f"/api/projects/{pid}/compose").json()["job"]
     _wait_job(client, job)
     proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["background_music"]
+    assert proj["subtitle_text"]
+    assert proj["subtitles"]
     assert proj["final_video"]
     assert client.get(proj["final_video"]).status_code == 200
 
-    # 保存至 pCloud(Phase 6 前先標記)
+    costs = client.get(f"/api/projects/{pid}/costs").json()
+    assert "estimated_with_retry_usd" in costs
+    assert "video" in costs["by_stage"]
+
+    # 保存至 pCloud(dry-run 仍標記佔位,live 走 WebDAV)
     assert client.post(f"/api/projects/{pid}/save_pcloud").json()["saved"] is True
 
 

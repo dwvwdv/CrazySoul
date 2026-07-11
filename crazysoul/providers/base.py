@@ -95,6 +95,24 @@ class VideoProvider(ABC):
     ) -> list[Path]:
         """產出 len(out_paths) 段影片到指定路徑,回傳實際產出的路徑清單。"""
 
+    def extend(
+        self,
+        src_path: Path,
+        out_path: Path,
+        cfg: Config,
+        costs: list[CostEntry],
+        *,
+        extend_seconds: float = 5.0,
+    ) -> Path:
+        """延伸既有影片片段;Provider 可覆寫 live API,dry-run 使用本地 FFmpeg。"""
+        from ..ffmpeg import extend_clip
+
+        if not cfg.dry_run:
+            raise NotImplementedError(f"{self.name} 尚未實作 live extend()")
+        extend_clip(src_path, out_path, extend_seconds=extend_seconds)
+        costs.append(CostEntry("extend", f"dry-run/{self.name}", 0.0, f"+{extend_seconds:.0f}s"))
+        return out_path
+
 
 # ---- 註冊表:字串 → Provider 實例 ----
 _IMAGE_PROVIDERS: dict[str, ImageProvider] = {}

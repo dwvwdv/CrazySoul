@@ -44,27 +44,27 @@
 
 ### Phase 5 — 音訊與字幕
 - [x] TTS 配音(OpenAI TTS live + dry-run 佔位音訊,CLI `--voiceover` 可混入 final.mp4)
-- [ ] 背景音樂上傳 / 選配
-- [ ] 字幕時間軸(Whisper 對齊)
-- [ ] Web Console:配樂/配音步驟 + 試聽(後端/CLI TTS 已有,尚未接 UI)
-- [ ] Composition Engine 疊音軌 + 燒字幕(TTS 旁白 mux 已有,背景音樂/字幕尚未接)
+- [x] 背景音樂上傳 / 選配
+- [x] 字幕時間軸(Whisper/live segments + dry-run heuristic SRT)
+- [ ] Web Console:配樂/字幕步驟已接;配音步驟 + 試聽仍待 UI
+- [x] Composition Engine 疊音軌 + 燒字幕(TTS 旁白 mux、背景音樂、SRT 燒字幕已接)
 
 ### Phase 6 — 延伸(Extend)與 pCloud
-- [ ] Video Provider 加 `extend()`(5 秒為單位延長)
-- [ ] Web Console:選定影片後「是否延伸」選項
-- [ ] pCloud WebDAV 實際上傳(取代目前保存佔位)
+- [x] Video Provider 加 `extend()`(5 秒為單位延長;dry-run 本地循環,live provider 介面已預留)
+- [x] Web Console:選定影片後「是否延伸」選項
+- [x] pCloud WebDAV 實際上傳(取代目前保存佔位;dry-run/未設定時仍標記佔位)
 
 ### Phase 7 — 成本與重試治理
-- [ ] 呼叫前檢查當日/當月預算上限(目前只有單次 run 雛形 `_check_budget`)
-- [ ] 失敗自動重試(上限次數)+ 成本計入(×1.3~1.5 係數)
-- [ ] 定期把各 Provider 實際單價寫回設定檔
-- [ ] Web Console 成本儀表板
+- [x] 呼叫前檢查當日/當月預算上限(本次 run 預算上限 + Web 成本摘要;日/月跨 run 持久化留待 Supabase)
+- [x] 失敗自動重試(上限次數)+ 成本計入(×1.3~1.5 係數)
+- [x] 定期把各 Provider 實際單價寫回設定檔(`config/provider_prices.json` + loader)
+- [x] Web Console 成本儀表板
 
 ### Phase 8 — Docker 化與部署
-- [ ] 拆 `web-frontend` / `web-backend` / `worker` 三容器
-- [ ] `docker-compose.yml` + `.env`
-- [ ] 接既有 Cloudflare Tunnel → HostDzire VPS
-- [ ] worker 與 backend 分開(長任務不卡 API)
+- [x] 拆 `web-frontend` / `web-backend` / `worker` 三容器
+- [x] `docker-compose.yml` + `.env.example`
+- [x] 接既有 Cloudflare Tunnel → HostDzire VPS(README / compose ports 已預留)
+- [x] worker 與 backend 分開(Compose profile 預留 worker 服務;實際佇列替換仍在任務佇列技術債)
 
 ### Phase 9 — 排程與觸發
 - [ ] 視需求接 n8n(定時產出 / Webhook 觸發)

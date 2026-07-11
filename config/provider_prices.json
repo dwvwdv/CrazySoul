@@ -1,0 +1,14 @@
+{
+  "image": {
+    "fal-flux": 0.03,
+    "fal-sdxl": 0.02
+  },
+  "video": {
+    "fal-kling": 0.28,
+    "fal-wan": 0.20
+  },
+  "tts": {
+    "openai-tts": 0.0
+  },
+  "updated_at": "manual"
+}

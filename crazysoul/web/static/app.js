@@ -122,6 +122,9 @@ function renderProject(p) {
     $("final-block").classList.remove("hidden");
     $("final-video").src = p.final_video;
   }
+  $("music-status").textContent = p.background_music ? "已選配樂 ✓" : "";
+  if (document.activeElement !== $("subtitle-text")) $("subtitle-text").value = p.subtitle_text || "";
+  $("subtitle-status").textContent = p.subtitles ? "已產生字幕 ✓" : (p.subtitle_text ? "已套用字幕稿 ✓" : "");
   $("save-status").textContent = p.saved_to_pcloud ? "已保存至 pCloud ✓" : "";
 }
 
@@ -233,9 +236,28 @@ function renderShot(s) {
       if (s.stage === "awaiting_video_pick") {
         wrap.appendChild(genControls("影片(重生)", s.index, "gen-videos", 3, "secondary"));
       }
+      if (s.stage === "done" && !s.extended_video) {
+        wrap.appendChild(extendControls(s.index));
+      }
     }
   }
   return wrap;
+}
+
+
+function extendControls(idx) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.style.marginTop = "10px";
+  row.innerHTML = `
+    <div>
+      <label>延伸秒數</label>
+      <input type="number" id="extend-seconds-${idx}" value="5" min="1" max="15" />
+    </div>
+    <button class="secondary" data-act="extend-video" data-idx="${idx}">延伸選定影片</button>
+    <span class="status-line" id="status-extend-video-${idx}"></span>
+  `;
+  return row;
 }
 
 function genControls(label, idx, act, defCount, btnClass = "") {
@@ -296,6 +318,13 @@ $("shots-container").addEventListener("click", async (e) => {
     } else if (act === "set-route") {
       await api("POST", `/api/projects/${currentPid}/shots/${idx}/route`, { route: t.dataset.route });
       await loadProject();
+    } else if (act === "extend-video") {
+      const seconds = parseFloat($(`extend-seconds-${idx}`).value) || 5;
+      const status = $(`status-extend-video-${idx}`);
+      status.textContent = "延伸中…";
+      t.disabled = true;
+      await api("POST", `/api/projects/${currentPid}/shots/${idx}/extend`, { seconds });
+      await loadProject();
     }
   } catch (err) {
     alert(err.message);
@@ -321,6 +350,35 @@ $("shots-container").addEventListener("change", async (e) => {
 });
 
 // ---- 合成 / 保存 ----
+
+$("upload-music-btn").addEventListener("click", async () => {
+  const f = $("music-file").files[0];
+  if (!f) { $("music-status").textContent = "請先選擇音訊檔。"; return; }
+  const fd = new FormData();
+  fd.append("file", f);
+  $("music-status").textContent = "上傳中…";
+  try {
+    const resp = await fetch(`/api/projects/${currentPid}/background_music`, { method: "POST", body: fd });
+    if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || resp.statusText);
+    $("music-status").textContent = "已選配樂 ✓";
+    await loadProject();
+  } catch (e) {
+    $("music-status").innerHTML = `<span class="error">${e.message}</span>`;
+  }
+});
+
+
+$("save-subtitles-btn").addEventListener("click", async () => {
+  $("subtitle-status").textContent = "套用中…";
+  try {
+    await api("POST", `/api/projects/${currentPid}/subtitles`, { text: $("subtitle-text").value });
+    $("subtitle-status").textContent = $("subtitle-text").value.trim() ? "已套用字幕稿 ✓" : "已清除字幕";
+    await loadProject();
+  } catch (e) {
+    $("subtitle-status").innerHTML = `<span class="error">${e.message}</span>`;
+  }
+});
+
 $("compose-btn").addEventListener("click", async () => {
   const btn = $("compose-btn");
   btn.disabled = true;
@@ -334,6 +392,18 @@ $("compose-btn").addEventListener("click", async () => {
     $("compose-status").innerHTML = `<span class="error">${e.message}</span>`;
   } finally {
     btn.disabled = false;
+  }
+});
+
+
+$("cost-btn").addEventListener("click", async () => {
+  $("cost-status").textContent = "更新中…";
+  try {
+    const r = await api("GET", `/api/projects/${currentPid}/costs`);
+    $("cost-panel").textContent = JSON.stringify(r, null, 2);
+    $("cost-status").textContent = "完成 ✓";
+  } catch (e) {
+    $("cost-status").innerHTML = `<span class="error">${e.message}</span>`;
   }
 });
 

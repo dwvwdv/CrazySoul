@@ -188,8 +188,9 @@ Prompt / 主題
 - pCloud — 外部儲存,WebDAV 呼叫即可。
 
 **部署方式:**
-- 一份 `docker-compose.yml` 定義上述容器,`.env` 存所有 API Key、密碼 hash、Supabase 連線字串。
-- Cloudflare Tunnel 指向 `web-frontend` 的對外 port,不需要額外開防火牆 port。
+- 一份 `docker-compose.yml` 定義 `web-backend` / `web-frontend` / `worker`,`.env` 存所有 API Key、密碼、pCloud WebDAV 與成本上限設定。
+- 本 repo 已提供 `Dockerfile`、`docker-compose.yml`、`.env.example`;初次部署可 `cp .env.example .env` 後填入憑證,再執行 `docker compose up --build web-backend`。
+- Cloudflare Tunnel 指向 `web-frontend` 或 `web-backend` 對外 port,不需要額外開防火牆 port。
 - 沿用你既有的 auto-deploy 流程(GitHub repo → 部署腳本 → Docker 起服務 → Tunnel 掛上網域)即可套用在這個專案上,不需要另外設計部署流程。
 
 ---

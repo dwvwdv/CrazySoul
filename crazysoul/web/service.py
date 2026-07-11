@@ -8,13 +8,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..audio import mux_background_music
 from ..config import Config
 from ..ffmpeg import concat_clips
-from ..models import Character
+from ..models import Character, CostEntry
 from ..providers.base import ImageRequest
 from ..providers.image import generate_images
 from ..routing import Route, decide_routes, render_clip
+from ..providers.video import extend_clip_with_provider
 from ..storyboard import generate_storyboard
+from ..subtitles import burn_subtitles, generate_subtitle_timeline
+from ..storage import upload_webdav
+from ..guardrails import estimated_spend
 from .store import Candidate, Project, ShotState
 
 
@@ -153,6 +158,46 @@ def select_video(project: Project, shot_idx: int, cid: str) -> dict:
     return {"selected": cid}
 
 
+def extend_selected_video(cfg: Config, project: Project, shot_idx: int, extend_seconds: float = 5.0) -> dict:
+    """把已選定的影片片段延伸,並把延伸後檔案設為新的選定候選。"""
+    st = project.shots[shot_idx]
+    cand = st.selected_video_cand()
+    if cand is None:
+        raise ValueError("尚未選定影片,無法延伸。")
+    pdir = project_dir(cfg, project.pid)
+    src = pdir / cand.url.split(f"/media/{project.pid}/", 1)[1]
+    rel = f"shot_{shot_idx:02d}/vid_extended.mp4"
+    out = pdir / rel
+    extend_clip_with_provider(src, out, cfg, project.costs, extend_seconds=extend_seconds)
+    cid = f"v{shot_idx}_extended"
+    st.video_candidates = [c for c in st.video_candidates if c.cid != cid]
+    st.video_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="video"))
+    st.selected_video = cid
+    st.extended_video = True
+    st.stage = "done"
+    return {"selected": cid, "extended": True}
+
+
+def save_background_music(cfg: Config, project: Project, data: bytes, suffix: str) -> dict:
+    """保存使用者上傳的背景音樂,供合成 final.mp4 時混入。"""
+    if not data:
+        raise ValueError("背景音樂檔不可為空。")
+    suffix = suffix or ".mp3"
+    rel = f"audio/background_music{suffix}"
+    out = project_dir(cfg, project.pid) / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    project.background_music = rel
+    return {"background_music": _media_url(project.pid, rel)}
+
+
+def set_subtitle_text(project: Project, text: str) -> dict:
+    """設定合成 final.mp4 時要使用的字幕文字。"""
+    project.subtitle_text = text.strip()
+    project.subtitles = None
+    return {"subtitle_text": project.subtitle_text}
+
+
 def run_compose(cfg: Config, project: Project) -> dict:
     if not project.shots or not all(s.stage == "done" for s in project.shots):
         raise ValueError("還有分鏡尚未選定影片,無法合成。")
@@ -163,15 +208,51 @@ def run_compose(cfg: Config, project: Project) -> dict:
         assert cand is not None
         clips.append(pdir / cand.url.split(f"/media/{project.pid}/", 1)[1])
     rel = "final.mp4"
-    concat_clips(clips, pdir / rel)
+    composed = pdir / rel
+    concat_clips(clips, composed)
+    if project.background_music:
+        rel = "final_with_music.mp4"
+        mux_background_music(composed, pdir / project.background_music, pdir / rel)
+        project.costs.append(CostEntry("music", "local-upload", 0.0, project.background_music))
+    if project.subtitle_text:
+        source = pdir / rel
+        srt_rel = "subtitles/captions.srt"
+        total_duration = sum(max(0.1, st.shot.duration) for st in project.shots)
+        generate_subtitle_timeline(
+            project.subtitle_text, pdir / srt_rel, cfg, project.costs, duration=total_duration
+        )
+        rel = "final_with_subtitles.mp4"
+        burn_subtitles(source, pdir / srt_rel, pdir / rel)
+        project.subtitles = srt_rel
     project.final_video = _media_url(project.pid, rel)
     return {"final_video": project.final_video}
 
 
-def save_to_pcloud(project: Project) -> dict:
-    """Phase 0/4:「保存至 pCloud」為主要動作。實際 WebDAV 上傳留待 Phase 6,
-    這裡先標記完成,讓主流程走得通(README:先跑通,再抽象)。"""
+def cost_summary(cfg: Config, project: Project) -> dict:
+    """回傳 Web 成本儀表板所需摘要。"""
+    by_stage: dict[str, float] = {}
+    for c in project.costs:
+        by_stage[c.stage] = round(by_stage.get(c.stage, 0.0) + c.unit_cost_usd, 4)
+    raw = round(sum(c.unit_cost_usd for c in project.costs), 4)
+    return {
+        "raw_cost_usd": raw,
+        "estimated_with_retry_usd": estimated_spend(project.costs, cfg),
+        "retry_factor": cfg.cost_retry_factor,
+        "limit_usd": cfg.cost_limit_usd,
+        "by_stage": by_stage,
+        "entries": [c.to_dict() for c in project.costs],
+    }
+
+
+def save_to_pcloud(cfg: Config, project: Project) -> dict:
+    """把最終影片上傳到 pCloud WebDAV;dry-run 或未設定時保留本地佔位。"""
     if not project.final_video:
         raise ValueError("尚未合成最終影片。")
+    if cfg.dry_run or not cfg.pcloud_webdav_url:
+        project.saved_to_pcloud = True
+        return {"saved": True, "note": "dry-run/未設定 WebDAV,已標記保存佔位"}
+    pdir = project_dir(cfg, project.pid)
+    rel = project.final_video.split(f"/media/{project.pid}/", 1)[1]
+    remote = upload_webdav(pdir / rel, f"{project.pid}-{Path(rel).name}", cfg)
     project.saved_to_pcloud = True
-    return {"saved": True, "note": "pCloud WebDAV 實際上傳留待 Phase 6"}
+    return {"saved": True, "remote_path": remote}

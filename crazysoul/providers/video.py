@@ -22,6 +22,7 @@ from .base import (
     get_video_provider,
     register_video_provider,
 )
+from ..guardrails import check_budget, retry_call
 
 
 class _FalVideoProvider(VideoProvider):
@@ -46,18 +47,23 @@ class _FalVideoProvider(VideoProvider):
                 )
                 continue
 
+            check_budget(cfg, costs, next_cost=self.unit_cost_usd)
             if not cfg.fal_key:
                 raise RuntimeError("未設定 FAL_KEY(或改用 --dry-run)。")
             # fal.ai 需要可存取的圖片 URL;先上傳到 fal 儲存再餵給 image-to-video。
             image_url = _upload_image(req.image_path, cfg.fal_key)
-            result = falai.run_model(
-                cfg.fal_key,
-                endpoint=self.endpoint,
-                payload={
-                    "prompt": req.motion_hint or "",
-                    "image_url": image_url,
-                    "duration": str(int(round(req.duration))),
-                },
+            result = retry_call(
+                lambda: falai.run_model(
+                    cfg.fal_key,
+                    endpoint=self.endpoint,
+                    payload={
+                        "prompt": req.motion_hint or "",
+                        "image_url": image_url,
+                        "duration": str(int(round(req.duration))),
+                    },
+                ),
+                cfg,
+                label=f"{self.name} video generate",
             )
             raw = out.with_name(out.stem + "_raw.mp4")
             falai.download(result["video"]["url"], raw, cfg.fal_key)
@@ -128,3 +134,17 @@ def _upload_image(image_path: Path, fal_key: str) -> str:
         )
         resp.raise_for_status()
         return resp.json()["url"]
+
+
+def extend_clip_with_provider(
+    src_path: Path,
+    out_path: Path,
+    cfg: Config,
+    costs: list[CostEntry],
+    *,
+    extend_seconds: float = 5.0,
+) -> Path:
+    """統一入口:依 `cfg.video_provider` 延伸已選影片。"""
+    return get_video_provider(cfg.video_provider).extend(
+        src_path, out_path, cfg, costs, extend_seconds=extend_seconds
+    )
