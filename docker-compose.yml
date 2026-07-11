@@ -18,7 +18,7 @@ services:
       CRAZYSOUL_WORKER: "1"
     volumes:
       - crazysoul-output:/data/output
-    command: ["python", "-m", "crazysoul.web"]
+    command: ["python", "-m", "crazysoul.worker"]
     profiles: ["worker"]
 
   web-frontend:

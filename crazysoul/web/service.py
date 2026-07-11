@@ -11,15 +11,15 @@ from pathlib import Path
 from ..audio import mux_background_music
 from ..config import Config
 from ..ffmpeg import concat_clips
+from ..guardrails import estimated_spend
 from ..models import Character, CostEntry
 from ..providers.base import ImageRequest
 from ..providers.image import generate_images
-from ..routing import Route, decide_routes, render_clip
 from ..providers.video import extend_clip_with_provider
+from ..routing import Route, decide_routes, render_clip
 from ..storyboard import generate_storyboard
 from ..subtitles import burn_subtitles, generate_subtitle_timeline
 from ..storage import upload_webdav
-from ..guardrails import estimated_spend
 from .store import Candidate, Project, ShotState
 
 
@@ -138,6 +138,7 @@ def run_video_candidates(
     # 從 URL 反推本地圖片路徑
     image_path = pdir / chosen.url.split(f"/media/{project.pid}/", 1)[1]
     st.video_candidates = []
+    st.extended_video = False
     for k in range(count):
         cid = f"v{shot_idx}_{k}"
         rel = f"shot_{shot_idx:02d}/vid_{k:02d}.mp4"
@@ -154,6 +155,7 @@ def select_video(project: Project, shot_idx: int, cid: str) -> dict:
     if not any(c.cid == cid for c in st.video_candidates):
         raise ValueError(f"找不到影片候選 {cid}")
     st.selected_video = cid
+    st.extended_video = False
     st.stage = "done"
     return {"selected": cid}
 
