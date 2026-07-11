@@ -13,6 +13,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from .audio import mux_voiceover, synthesize_voiceover
 from .config import Config
 from .ffmpeg import concat_clips
 from .models import Character, CostEntry, RunResult, ShotResult
@@ -26,10 +27,12 @@ def run_pipeline(
     cfg: Config,
     num_shots: int = 3,
     characters: list[Character] | None = None,
+    voiceover_text: str | None = None,
 ) -> RunResult:
     """跑一次完整 Phase 0 管線,回傳結果與產物路徑。
 
     `characters`:Phase 2 角色庫;分鏡標記的出場角色會在生圖時自動帶入。
+    `voiceover_text`:Phase 5 TTS 配音文字;提供時會產生旁白並混入 final.mp4。
     """
     char_map = {c.name: c for c in (characters or [])}
     run_dir = cfg.output_root / datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -77,6 +80,15 @@ def run_pipeline(
     _log("FFmpeg 串接最終影片…")
     final_video = run_dir / "final.mp4"
     concat_clips([Path(r.clip_path) for r in shot_results], final_video)
+
+    if voiceover_text and voiceover_text.strip():
+        _log("產生 TTS 配音並混入最終影片…")
+        voiceover_path = synthesize_voiceover(
+            voiceover_text, run_dir / "audio" / "voiceover.wav", cfg, costs
+        )
+        voiced_video = run_dir / "final_with_voiceover.mp4"
+        mux_voiceover(final_video, voiceover_path, voiced_video)
+        final_video = voiced_video
 
     # 成本紀錄(對應 Supabase cost_log,Phase 0 先落地成檔案)
     (run_dir / "cost_log.json").write_text(
