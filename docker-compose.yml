@@ -4,6 +4,8 @@ services:
     env_file: .env
     environment:
       CRAZYSOUL_OUTPUT: /data/output
+      # 容器內預設 127.0.0.1 只綁 loopback,host 連不到;對外服務須綁所有介面
+      CRAZYSOUL_WEB_HOST: 0.0.0.0
     volumes:
       - crazysoul-output:/data/output
     ports:
@@ -24,6 +26,8 @@ services:
   web-frontend:
     build: .
     env_file: .env
+    environment:
+      CRAZYSOUL_WEB_HOST: 0.0.0.0
     depends_on:
       - web-backend
     ports:

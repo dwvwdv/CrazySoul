@@ -74,7 +74,12 @@ class _FalImageProvider(ImageProvider):
         for k, out in enumerate(out_paths):
             # 批量結果不足時退回逐張呼叫,確保每個候選都有圖
             url = images[k]["url"] if k < len(images) else self._single(req, cfg, base_seed, start + k)
-            falai.download(url, out, cfg.fal_key)
+            # 模型已跑完付費;下載單獨重試,暫時性失敗不用重跑整個生成
+            retry_call(
+                lambda u=url, o=out: falai.download(u, o, cfg.fal_key),
+                cfg,
+                label=f"{self.name} image download",
+            )
             costs.append(
                 CostEntry(
                     "image", self.name, unit_cost, f"分鏡{req.shot_index} 候選{start + k}"

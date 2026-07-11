@@ -68,7 +68,12 @@ class _FalVideoProvider(VideoProvider):
                 label=f"{self.name} video generate",
             )
             raw = out.with_name(out.stem + "_raw.mp4")
-            falai.download(result["video"]["url"], raw, cfg.fal_key)
+            # 模型已跑完付費;下載單獨重試,暫時性失敗不用重跑整個生成
+            retry_call(
+                lambda: falai.download(result["video"]["url"], raw, cfg.fal_key),
+                cfg,
+                label=f"{self.name} video download",
+            )
             ffmpeg.normalize_clip(raw, out, duration=req.duration)  # 統一畫布/編碼,無縫串接
             raw.unlink(missing_ok=True)
             costs.append(

@@ -47,6 +47,7 @@ class ShotState:
     video_candidates: list[Candidate] = field(default_factory=list)
     selected_video: str | None = None   # candidate id
     extended_video: bool = False        # 是否已對選定影片做延伸
+    extend_seconds: float = 0.0         # 累計延伸秒數,合成字幕時長要加上
 
     def selected_image_cand(self) -> Candidate | None:
         return next((c for c in self.image_candidates if c.cid == self.selected_image), None)

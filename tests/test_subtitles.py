@@ -24,6 +24,41 @@ def test_generate_subtitle_timeline_writes_srt(tmp_path):
     assert costs[0].stage == "subtitle"
 
 
+def test_heuristic_cues_stay_monotonic_within_duration(tmp_path):
+    # 短影片配很多短句:最短 0.25s 撐開後,時間軸仍須單調且不超過影片長度
+    costs: list[CostEntry] = []
+    out = tmp_path / "captions.srt"
+    cues = generate_subtitle_timeline(
+        "一。二。三。四。五。六。七。八。", out, Config(dry_run=True), costs, duration=1.0
+    )
+    prev_end = 0.0
+    for cue in cues:
+        assert cue.start == prev_end  # 下一句從上一句實際結束的時間開始
+        assert cue.end >= cue.start
+        prev_end = cue.end
+    assert cues[-1].end <= 1.0
+
+
+def test_pipeline_passes_voiceover_audio_to_subtitles(tmp_path, monkeypatch):
+    # 有生成配音時,字幕對齊必須拿到音檔(live 模式才能走 Whisper)
+    import crazysoul.pipeline as pipeline_mod
+
+    captured: dict = {}
+    real = pipeline_mod.generate_subtitle_timeline
+
+    def spy(text, out_path, cfg, costs, *, duration, audio_path=None):
+        captured["audio_path"] = audio_path
+        return real(text, out_path, cfg, costs, duration=duration, audio_path=audio_path)
+
+    monkeypatch.setattr(pipeline_mod, "generate_subtitle_timeline", spy)
+    cfg = Config(dry_run=True, output_root=tmp_path)
+    run_pipeline(
+        "測試主題", cfg, num_shots=1, voiceover_text="這是旁白。", subtitle_text="這是字幕。"
+    )
+    assert captured["audio_path"] is not None
+    assert captured["audio_path"].is_file()
+
+
 def test_burn_subtitles_creates_video(tmp_path):
     img = tmp_path / "img.png"
     video = tmp_path / "clip.mp4"

@@ -87,6 +87,7 @@ def run_pipeline(
     concat_clips([Path(r.clip_path) for r in shot_results], final_video)
 
     has_audio = False
+    voiceover_path: Path | None = None
     if voiceover_text and voiceover_text.strip():
         _log("產生 TTS 配音並混入最終影片…")
         voiceover_path = synthesize_voiceover(
@@ -110,8 +111,9 @@ def run_pipeline(
         _log("產生字幕時間軸並燒進影片…")
         srt_path = run_dir / "subtitles" / "captions.srt"
         total_duration = sum(max(0.1, s.shot.duration) for s in shot_results)
+        # 有生成配音時傳入音檔,live 模式才能走 Whisper 對齊而不是啟發式切句
         generate_subtitle_timeline(
-            subtitle_text, srt_path, cfg, costs, duration=total_duration
+            subtitle_text, srt_path, cfg, costs, duration=total_duration, audio_path=voiceover_path
         )
         subtitled_video = run_dir / "final_with_subtitles.mp4"
         burn_subtitles(final_video, srt_path, subtitled_video)

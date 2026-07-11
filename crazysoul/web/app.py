@@ -222,6 +222,9 @@ def create_app() -> FastAPI:
             return service.extend_selected_video(cfg, _project(pid), idx, seconds)
         except (ValueError, IndexError) as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+        except NotImplementedError as exc:
+            # live 模式 Provider 尚未支援延伸:回受控錯誤而不是 500
+            raise HTTPException(status_code=400, detail=str(exc))
 
     @app.post("/api/projects/{pid}/subtitles", dependencies=[Depends(require_auth)])
     def set_subtitles(pid: str, body: SubtitleBody):

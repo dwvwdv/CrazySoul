@@ -139,6 +139,7 @@ def run_video_candidates(
     image_path = pdir / chosen.url.split(f"/media/{project.pid}/", 1)[1]
     st.video_candidates = []
     st.extended_video = False
+    st.extend_seconds = 0.0
     for k in range(count):
         cid = f"v{shot_idx}_{k}"
         rel = f"shot_{shot_idx:02d}/vid_{k:02d}.mp4"
@@ -156,6 +157,7 @@ def select_video(project: Project, shot_idx: int, cid: str) -> dict:
         raise ValueError(f"找不到影片候選 {cid}")
     st.selected_video = cid
     st.extended_video = False
+    st.extend_seconds = 0.0
     st.stage = "done"
     return {"selected": cid}
 
@@ -176,6 +178,7 @@ def extend_selected_video(cfg: Config, project: Project, shot_idx: int, extend_s
     st.video_candidates.append(Candidate(cid=cid, url=_media_url(project.pid, rel), kind="video"))
     st.selected_video = cid
     st.extended_video = True
+    st.extend_seconds += extend_seconds
     st.stage = "done"
     return {"selected": cid, "extended": True}
 
@@ -219,7 +222,10 @@ def run_compose(cfg: Config, project: Project) -> dict:
     if project.subtitle_text:
         source = pdir / rel
         srt_rel = "subtitles/captions.srt"
-        total_duration = sum(max(0.1, st.shot.duration) for st in project.shots)
+        # 延伸過的片段實際長度比分鏡預估長,要把累計延伸秒數算進字幕時長
+        total_duration = sum(
+            max(0.1, st.shot.duration) + st.extend_seconds for st in project.shots
+        )
         generate_subtitle_timeline(
             project.subtitle_text, pdir / srt_rel, cfg, project.costs, duration=total_duration
         )
@@ -250,9 +256,11 @@ def save_to_pcloud(cfg: Config, project: Project) -> dict:
     """把最終影片上傳到 pCloud WebDAV;dry-run 或未設定時保留本地佔位。"""
     if not project.final_video:
         raise ValueError("尚未合成最終影片。")
-    if cfg.dry_run or not cfg.pcloud_webdav_url:
+    # 憑證不完整(例如照 .env.example 只留 URL)一律視為未設定,避免上傳時 500
+    webdav_ready = bool(cfg.pcloud_webdav_url and cfg.pcloud_username and cfg.pcloud_password)
+    if cfg.dry_run or not webdav_ready:
         project.saved_to_pcloud = True
-        return {"saved": True, "note": "dry-run/未設定 WebDAV,已標記保存佔位"}
+        return {"saved": True, "note": "dry-run/WebDAV 設定不完整,已標記保存佔位"}
     pdir = project_dir(cfg, project.pid)
     rel = project.final_video.split(f"/media/{project.pid}/", 1)[1]
     remote = upload_webdav(pdir / rel, f"{project.pid}-{Path(rel).name}", cfg)
