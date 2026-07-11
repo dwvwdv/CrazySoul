@@ -117,8 +117,10 @@ def _heuristic_cues(text: str, duration: float) -> list[SubtitleCue]:
             end = safe_duration
         else:
             share = max(1, len(part)) / total_chars
-            end = min(safe_duration, cursor + safe_duration * share)
-        cues.append(SubtitleCue(cursor, max(cursor + 0.25, end), part))
+            end = cursor + safe_duration * share
+        # 套用最短 0.25s 後夾回影片長度,cursor 前進到實際輸出的 end,保持時間軸單調
+        end = min(safe_duration, max(cursor + 0.25, end))
+        cues.append(SubtitleCue(cursor, end, part))
         cursor = end
     return cues
 

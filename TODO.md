@@ -17,6 +17,7 @@
 - [x] 縮圖牆批量候選(`count=n`,dry-run 佔位圖顏色由 seed 決定,肉眼可分辨)
 - [x] lazyrhythm-design 基礎風格(Nord × Brutalism)
 - [x] CI(GitHub Actions,Python 3.11 / 3.12)+ 測試 52 項
+- [x] PR #5 review 修復(8 項):`.dockerignore` 排除 `.env`、compose 綁 `0.0.0.0`、字幕對齊帶入配音音檔、live extend 回受控 400、WebDAV 憑證不完整走佔位、字幕時長含延伸秒數、fal 下載也重試、heuristic 字幕時間軸保持單調(測試 75 項)
 
 ---
 
@@ -51,6 +52,7 @@
 
 ### Phase 6 — 延伸(Extend)與 pCloud
 - [x] Video Provider 加 `extend()`(5 秒為單位延長;dry-run 本地循環,live provider 介面已預留)
+- [ ] 後續:provider 的 live extend 實作(目前 live 走受控 400 錯誤,Web 收到明確訊息)
 - [x] Web Console:選定影片後「是否延伸」選項
 - [x] pCloud WebDAV 實際上傳(取代目前保存佔位;dry-run/未設定時仍標記佔位)
 

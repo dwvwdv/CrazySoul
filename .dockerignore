@@ -1,0 +1,19 @@
+# 避免把憑證與本地產物烤進 Docker image(review P1)
+.env
+.env.*
+!.env.example
+.git
+.github
+.gitignore
+output/
+outputs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+.dockerignore
+Dockerfile
+docker-compose.yml
