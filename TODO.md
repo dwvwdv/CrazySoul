@@ -43,11 +43,11 @@
 - [ ] 後續:第二家的 live 端點與回傳格式需實測(目前僅驗證 dry-run 與介面一致性);Web UI 可加 Provider 選擇下拉
 
 ### Phase 5 — 音訊與字幕
-- [ ] TTS 配音(ElevenLabs 或 OpenAI TTS)
+- [x] TTS 配音(OpenAI TTS live + dry-run 佔位音訊,CLI `--voiceover` 可混入 final.mp4)
 - [ ] 背景音樂上傳 / 選配
 - [ ] 字幕時間軸(Whisper 對齊)
-- [ ] Web Console:配樂/配音步驟 + 試聽
-- [ ] Composition Engine 疊音軌 + 燒字幕
+- [ ] Web Console:配樂/配音步驟 + 試聽(後端/CLI TTS 已有,尚未接 UI)
+- [ ] Composition Engine 疊音軌 + 燒字幕(TTS 旁白 mux 已有,背景音樂/字幕尚未接)
 
 ### Phase 6 — 延伸(Extend)與 pCloud
 - [ ] Video Provider 加 `extend()`(5 秒為單位延長)

@@ -35,10 +35,13 @@ class Config:
     llm_provider: str = "anthropic"
     image_provider: str = "fal-flux"
     video_provider: str = "fal-kling"
+    tts_provider: str = "openai-tts"
 
     # 模型參數
     # 使用 Anthropic 最新的 Opus 4.8 產生分鏡(擇一,也可換 OpenAI)
     llm_model: str = "claude-opus-4-8"
+    tts_model: str = "gpt-4o-mini-tts"
+    tts_voice: str = "alloy"
 
     # 憑證(dry-run 模式下可為空)
     anthropic_api_key: str | None = None
@@ -48,6 +51,7 @@ class Config:
     # 成本護欄(Phase 7 完整實作,先放參數)
     cost_limit_usd: float = 0.0
     cost_retry_factor: float = 1.4
+    tts_cost_usd: float = 0.0
 
     # Phase 1 Routing:動態分鏡比例上限([0,1])。
     # 1.0=所有 needs_motion 分鏡都走付費 Video Provider;
@@ -78,11 +82,15 @@ class Config:
             llm_provider=os.environ.get("LLM_PROVIDER", "anthropic"),
             image_provider=os.environ.get("IMAGE_PROVIDER", "fal-flux"),
             video_provider=os.environ.get("VIDEO_PROVIDER", "fal-kling"),
+            tts_provider=os.environ.get("TTS_PROVIDER", "openai-tts"),
             llm_model=os.environ.get("LLM_MODEL", "claude-opus-4-8"),
+            tts_model=os.environ.get("TTS_MODEL", "gpt-4o-mini-tts"),
+            tts_voice=os.environ.get("TTS_VOICE", "alloy"),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY") or None,
             openai_api_key=os.environ.get("OPENAI_API_KEY") or None,
             fal_key=os.environ.get("FAL_KEY") or None,
             cost_limit_usd=_num("COST_LIMIT_USD", 0.0),
             cost_retry_factor=_num("COST_RETRY_FACTOR", 1.4),
+            tts_cost_usd=_num("TTS_COST_USD", 0.0),
             dynamic_ratio=dynamic_ratio,
         )

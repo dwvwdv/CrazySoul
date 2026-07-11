@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="離線模式:不呼叫任何付費 API,用 FFmpeg 佔位素材驗證資料流。",
     )
     p.add_argument("--output", "-o", default="output", help="產物根目錄(預設 output/)。")
+    p.add_argument("--voiceover", default=None, help="Phase 5:要合成到影片中的 TTS 旁白文字。")
     return p
 
 
@@ -49,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg.output_root = Path(args.output)
 
     try:
-        run_pipeline(args.prompt, cfg, num_shots=args.shots)
+        run_pipeline(args.prompt, cfg, num_shots=args.shots, voiceover_text=args.voiceover)
     except Exception as exc:  # noqa: BLE001 - CLI 邊界,給使用者清楚訊息
         print(f"[crazysoul] 錯誤:{exc}", file=sys.stderr)
         return 1
