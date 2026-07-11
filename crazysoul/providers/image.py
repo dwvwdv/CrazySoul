@@ -14,7 +14,9 @@ from pathlib import Path
 
 from .. import ffmpeg
 from ..config import Config
+from ..guardrails import check_budget, retry_call
 from ..models import Character, CostEntry, Shot
+from ..pricing import provider_price
 from . import falai
 from .base import (
     ImageProvider,
@@ -51,6 +53,8 @@ class _FalImageProvider(ImageProvider):
                 )
             return out_paths
 
+        unit_cost = provider_price("image", self.name) or self.unit_cost_usd
+        check_budget(cfg, costs, next_cost=unit_cost * count)
         if not cfg.fal_key:
             raise RuntimeError("未設定 FAL_KEY(或改用 --dry-run)。")
 
@@ -61,7 +65,11 @@ class _FalImageProvider(ImageProvider):
         }
         if base_seed is not None:
             payload["seed"] = base_seed  # 角色一致性:固定 seed
-        result = falai.run_model(cfg.fal_key, endpoint=self.endpoint, payload=payload)
+        result = retry_call(
+            lambda: falai.run_model(cfg.fal_key, endpoint=self.endpoint, payload=payload),
+            cfg,
+            label=f"{self.name} image generate",
+        )
         images = result.get("images", [])
         for k, out in enumerate(out_paths):
             # 批量結果不足時退回逐張呼叫,確保每個候選都有圖
@@ -69,7 +77,7 @@ class _FalImageProvider(ImageProvider):
             falai.download(url, out, cfg.fal_key)
             costs.append(
                 CostEntry(
-                    "image", self.name, self.unit_cost_usd, f"分鏡{req.shot_index} 候選{start + k}"
+                    "image", self.name, unit_cost, f"分鏡{req.shot_index} 候選{start + k}"
                 )
             )
         return out_paths
@@ -82,7 +90,11 @@ class _FalImageProvider(ImageProvider):
             "num_images": 1,
             "seed": (base_seed or 0) + idx,
         }
-        return falai.run_model(cfg.fal_key, endpoint=self.endpoint, payload=payload)["images"][0]["url"]
+        return retry_call(
+            lambda: falai.run_model(cfg.fal_key, endpoint=self.endpoint, payload=payload)["images"][0]["url"],
+            cfg,
+            label=f"{self.name} image fallback",
+        )
 
 
 @register_image_provider

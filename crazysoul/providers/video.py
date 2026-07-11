@@ -15,6 +15,7 @@ from pathlib import Path
 from .. import ffmpeg
 from ..config import Config
 from ..models import CostEntry, Shot
+from ..pricing import provider_price
 from . import falai
 from .base import (
     VideoProvider,
@@ -47,7 +48,8 @@ class _FalVideoProvider(VideoProvider):
                 )
                 continue
 
-            check_budget(cfg, costs, next_cost=self.unit_cost_usd)
+            unit_cost = provider_price("video", self.name) or self.unit_cost_usd
+            check_budget(cfg, costs, next_cost=unit_cost)
             if not cfg.fal_key:
                 raise RuntimeError("未設定 FAL_KEY(或改用 --dry-run)。")
             # fal.ai 需要可存取的圖片 URL;先上傳到 fal 儲存再餵給 image-to-video。
@@ -70,7 +72,7 @@ class _FalVideoProvider(VideoProvider):
             ffmpeg.normalize_clip(raw, out, duration=req.duration)  # 統一畫布/編碼,無縫串接
             raw.unlink(missing_ok=True)
             costs.append(
-                CostEntry("video", self.name, self.unit_cost_usd, f"分鏡{req.shot_index} 候選{variant}")
+                CostEntry("video", self.name, unit_cost, f"分鏡{req.shot_index} 候選{variant}")
             )
         return out_paths
 
