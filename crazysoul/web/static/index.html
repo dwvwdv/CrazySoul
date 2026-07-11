@@ -93,10 +93,31 @@
       <div id="shots-container"></div>
 
       <div id="finalize" class="hidden" style="margin-top:20px; border-top: var(--border); padding-top:16px">
+        <div class="row" style="margin-bottom:12px">
+          <div>
+            <label for="music-file">背景音樂(選填)</label>
+            <input type="file" id="music-file" accept="audio/*" />
+          </div>
+          <button id="upload-music-btn" class="secondary">上傳/替換配樂</button>
+          <span class="status-line" id="music-status"></span>
+        </div>
+        <div style="margin-bottom:12px">
+          <label for="subtitle-text">字幕文字(選填)</label>
+          <textarea id="subtitle-text" placeholder="貼上旁白稿或字幕稿;合成時會產生 SRT 並燒進影片。"></textarea>
+          <div style="margin-top:8px">
+            <button id="save-subtitles-btn" class="secondary">套用字幕</button>
+            <span class="status-line" id="subtitle-status"></span>
+          </div>
+        </div>
         <button id="compose-btn">合成最終影片</button>
         <span class="status-line" id="compose-status"></span>
         <div id="final-block" class="final hidden" style="margin-top:16px">
           <video id="final-video" controls></video>
+          <div class="row" style="margin-top:12px">
+            <button id="cost-btn" class="secondary">更新成本儀表板</button>
+            <span class="status-line" id="cost-status"></span>
+          </div>
+          <pre id="cost-panel" class="muted"></pre>
           <div class="row" style="margin-top:12px">
             <button id="save-btn">保存至 pCloud</button>
             <button class="secondary coming-soon" disabled>發布至 YouTube Shorts</button>

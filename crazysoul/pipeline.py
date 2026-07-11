@@ -13,13 +13,14 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from .audio import mux_voiceover, synthesize_voiceover
+from .audio import mux_background_music, mux_voiceover, synthesize_voiceover
 from .config import Config
 from .ffmpeg import concat_clips
 from .models import Character, CostEntry, RunResult, ShotResult
 from .providers.image import generate_image
 from .routing import decide_routes, render_clip
 from .storyboard import generate_storyboard
+from .subtitles import burn_subtitles, generate_subtitle_timeline
 
 
 def run_pipeline(
@@ -28,11 +29,15 @@ def run_pipeline(
     num_shots: int = 3,
     characters: list[Character] | None = None,
     voiceover_text: str | None = None,
+    background_music: str | Path | None = None,
+    subtitle_text: str | None = None,
 ) -> RunResult:
     """跑一次完整 Phase 0 管線,回傳結果與產物路徑。
 
     `characters`:Phase 2 角色庫;分鏡標記的出場角色會在生圖時自動帶入。
     `voiceover_text`:Phase 5 TTS 配音文字;提供時會產生旁白並混入 final.mp4。
+    `background_music`:Phase 5 背景音樂檔;提供時會以低音量混入 final.mp4。
+    `subtitle_text`:Phase 5 字幕文字;提供時會產生 SRT 並燒進 final.mp4。
     """
     char_map = {c.name: c for c in (characters or [])}
     run_dir = cfg.output_root / datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -81,6 +86,8 @@ def run_pipeline(
     final_video = run_dir / "final.mp4"
     concat_clips([Path(r.clip_path) for r in shot_results], final_video)
 
+    has_audio = False
+    voiceover_path: Path | None = None
     if voiceover_text and voiceover_text.strip():
         _log("產生 TTS 配音並混入最終影片…")
         voiceover_path = synthesize_voiceover(
@@ -89,6 +96,28 @@ def run_pipeline(
         voiced_video = run_dir / "final_with_voiceover.mp4"
         mux_voiceover(final_video, voiceover_path, voiced_video)
         final_video = voiced_video
+        has_audio = True
+
+    if background_music:
+        _log("混入背景音樂…")
+        music_video = run_dir / ("final_with_voiceover_and_music.mp4" if has_audio else "final_with_music.mp4")
+        mux_background_music(
+            final_video, Path(background_music), music_video, mix_with_existing_audio=has_audio
+        )
+        final_video = music_video
+        costs.append(CostEntry("music", "local-upload", 0.0, Path(background_music).name))
+
+    if subtitle_text and subtitle_text.strip():
+        _log("產生字幕時間軸並燒進影片…")
+        srt_path = run_dir / "subtitles" / "captions.srt"
+        total_duration = sum(max(0.1, s.shot.duration) for s in shot_results)
+        # 有生成配音時傳入音檔,live 模式才能走 Whisper 對齊而不是啟發式切句
+        generate_subtitle_timeline(
+            subtitle_text, srt_path, cfg, costs, duration=total_duration, audio_path=voiceover_path
+        )
+        subtitled_video = run_dir / "final_with_subtitles.mp4"
+        burn_subtitles(final_video, srt_path, subtitled_video)
+        final_video = subtitled_video
 
     # 成本紀錄(對應 Supabase cost_log,Phase 0 先落地成檔案)
     (run_dir / "cost_log.json").write_text(

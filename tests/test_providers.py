@@ -14,7 +14,7 @@ from crazysoul.providers.base import (
     video_provider_names,
 )
 from crazysoul.providers.image import generate_image, generate_images
-from crazysoul.providers.video import generate_clips
+from crazysoul.providers.video import extend_clip_with_provider, generate_clips
 
 
 # ---- 註冊表 ----
@@ -99,3 +99,18 @@ def test_character_seed_changes_placeholder(tmp_path):
     generate_image(shot, withchar, cfg, costs, characters=[Character(name="小黑", seed=200)])
     # 帶了角色 seed 後,佔位圖的色相不同 → 內容不同
     assert plain.read_bytes() != withchar.read_bytes()
+
+
+def test_video_provider_extend_dry_run(tmp_path):
+    cfg = Config(dry_run=True, output_root=tmp_path)
+    costs: list[CostEntry] = []
+    from crazysoul import ffmpeg
+
+    img = tmp_path / "in.png"
+    src = tmp_path / "src.mp4"
+    out = tmp_path / "extended.mp4"
+    ffmpeg.make_placeholder_image(img, label="x", seed=1)
+    ffmpeg.image_to_motion_clip(img, src, 1.0)
+    extend_clip_with_provider(src, out, cfg, costs, extend_seconds=5)
+    assert out.exists() and out.stat().st_size > 0
+    assert costs[-1].stage == "extend"

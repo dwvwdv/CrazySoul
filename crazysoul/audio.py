@@ -16,6 +16,9 @@ from .ffmpeg import run as ffmpeg_run
 from .models import CostEntry
 
 
+DEFAULT_MUSIC_VOLUME = 0.18
+
+
 def synthesize_voiceover(text: str, out_path: Path, cfg: Config, costs: list[CostEntry]) -> Path:
     """Generate narration audio for the final video.
 
@@ -79,6 +82,58 @@ def mux_voiceover(video_path: Path, audio_path: Path, out_path: Path) -> Path:
             str(out_path),
         ]
     )
+    return out_path
+
+
+def mux_background_music(
+    video_path: Path,
+    music_path: Path,
+    out_path: Path,
+    *,
+    volume: float = DEFAULT_MUSIC_VOLUME,
+    mix_with_existing_audio: bool = False,
+) -> Path:
+    """把背景音樂混入影片,可選擇是否與既有音軌混音。
+
+    `mix_with_existing_audio=False` 用於常見的無聲影片:背景音樂會成為唯一音軌,
+    並裁切到影片長度。若已先混入旁白,則設為 True,保留旁白並把配樂壓低墊底。
+    """
+    if not music_path.is_file():
+        raise FileNotFoundError(f"background music not found: {music_path}")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    safe_volume = max(0.0, min(volume, 1.0))
+    if mix_with_existing_audio:
+        ffmpeg_run(
+            [
+                "-i", str(video_path),
+                "-stream_loop", "-1",
+                "-i", str(music_path),
+                "-filter_complex",
+                f"[1:a]volume={safe_volume:.3f}[bg];"
+                "[0:a:0][bg]amix=inputs=2:duration=first:dropout_transition=0[a]",
+                "-map", "0:v:0",
+                "-map", "[a]",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-shortest",
+                str(out_path),
+            ]
+        )
+    else:
+        ffmpeg_run(
+            [
+                "-i", str(video_path),
+                "-stream_loop", "-1",
+                "-i", str(music_path),
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-filter:a", f"volume={safe_volume:.3f}",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-shortest",
+                str(out_path),
+            ]
+        )
     return out_path
 
 

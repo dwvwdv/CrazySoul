@@ -11,6 +11,8 @@ import time
 
 import pytest
 
+from crazysoul.ffmpeg import run as ffmpeg_run
+
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
@@ -25,6 +27,16 @@ def client(tmp_path, monkeypatch):
 
     with TestClient(create_app()) as c:
         yield c
+
+
+def _make_test_music(path):
+    ffmpeg_run([
+        "-f", "lavfi",
+        "-i", "sine=frequency=330:sample_rate=44100:duration=2",
+        "-c:a", "pcm_s16le",
+        str(path),
+    ])
+    return path
 
 
 def _wait_job(client, jid, timeout=60):
@@ -50,7 +62,7 @@ def test_login_wrong_password(client):
     assert client.post("/api/login", json={"password": "nope"}).status_code == 401
 
 
-def test_full_flow(client):
+def test_full_flow(client, tmp_path):
     # 登入
     assert client.post("/api/login", json={"password": "test-pw"}).status_code == 200
     assert client.get("/api/me").json()["authed"] is True
@@ -83,19 +95,105 @@ def test_full_flow(client):
         vids = proj["shots"][idx]["video_candidates"]
         assert len(vids) == 2
         client.post(f"/api/projects/{pid}/shots/{idx}/select_video", json={"cid": vids[0]["cid"]})
+        if idx == 0:
+            resp = client.post(f"/api/projects/{pid}/shots/{idx}/extend", json={"seconds": 5})
+            resp.raise_for_status()
+            assert resp.json()["extended"] is True
 
     proj = client.get(f"/api/projects/{pid}").json()
     assert proj["all_done"] is True
 
-    # 合成最終影片
+    # 上傳背景音樂後合成最終影片
+    music = _make_test_music(tmp_path / "music.wav")
+    with music.open("rb") as fh:
+        resp = client.post(
+            f"/api/projects/{pid}/background_music",
+            files={"file": ("music.wav", fh, "audio/wav")},
+        )
+    resp.raise_for_status()
+    assert resp.json()["background_music"].endswith("/audio/background_music.wav")
+    resp = client.post(f"/api/projects/{pid}/subtitles", json={"text": "第一句字幕。第二句字幕。"})
+    resp.raise_for_status()
+    assert resp.json()["subtitle_text"].startswith("第一句")
+
     job = client.post(f"/api/projects/{pid}/compose").json()["job"]
     _wait_job(client, job)
     proj = client.get(f"/api/projects/{pid}").json()
+    assert proj["background_music"]
+    assert proj["subtitle_text"]
+    assert proj["subtitles"]
     assert proj["final_video"]
     assert client.get(proj["final_video"]).status_code == 200
 
-    # 保存至 pCloud(Phase 6 前先標記)
+    costs = client.get(f"/api/projects/{pid}/costs").json()
+    assert "estimated_with_retry_usd" in costs
+    assert "video" in costs["by_stage"]
+
+    # 保存至 pCloud(dry-run 仍標記佔位,live 走 WebDAV)
     assert client.post(f"/api/projects/{pid}/save_pcloud").json()["saved"] is True
+
+
+def test_extend_live_not_implemented_returns_400(client, monkeypatch):
+    # live 模式 Provider 尚未支援延伸時,前端要拿到受控的 400 而不是 500
+    client.post("/api/login", json={"password": "test-pw"})
+    r = client.post("/api/projects", json={"prompt": "x", "shots": 1})
+    pid = r.json()["pid"]
+    _wait_job(client, r.json()["job"])
+
+    from crazysoul.web import service
+
+    def boom(*args, **kwargs):
+        raise NotImplementedError("fal-kling 尚未實作 live extend()")
+
+    monkeypatch.setattr(service, "extend_selected_video", boom)
+    resp = client.post(f"/api/projects/{pid}/shots/0/extend", json={"seconds": 5})
+    assert resp.status_code == 400
+    assert "extend" in resp.json()["detail"]
+
+
+def test_save_to_pcloud_incomplete_credentials_uses_placeholder(tmp_path):
+    # 只設 URL、帳密留空(照 .env.example 抄)時,要走佔位路徑而不是 500
+    from crazysoul.config import Config
+    from crazysoul.web import service
+    from crazysoul.web.store import Project
+
+    cfg = Config(dry_run=False, output_root=tmp_path, pcloud_webdav_url="https://webdav.example")
+    project = Project(pid="p1", prompt="x", num_shots=1)
+    project.final_video = "/media/p1/final.mp4"
+    result = service.save_to_pcloud(cfg, project)
+    assert result["saved"] is True
+    assert "佔位" in result["note"]
+
+
+def test_compose_subtitle_duration_includes_extension(tmp_path, monkeypatch):
+    # 延伸過的分鏡,合成字幕時長要加上累計延伸秒數,避免字幕被壓縮
+    from crazysoul.config import Config
+    from crazysoul.models import Shot
+    from crazysoul.web import service
+    from crazysoul.web.store import Candidate, Project, ShotState
+
+    cfg = Config(dry_run=True, output_root=tmp_path)
+    project = Project(pid="p2", prompt="x", num_shots=1)
+    st = ShotState(shot=Shot(index=0, description="d", duration=4.0), stage="done")
+    st.video_candidates = [Candidate(cid="v0_0", url="/media/p2/shot_00/vid_00.mp4", kind="video")]
+    st.selected_video = "v0_0"
+    st.extend_seconds = 5.0
+    project.shots = [st]
+    project.subtitle_text = "字幕。"
+
+    captured: dict = {}
+    monkeypatch.setattr(service, "concat_clips", lambda clips, out: out.write_bytes(b"v"))
+    monkeypatch.setattr(service, "burn_subtitles", lambda src, srt, out: out.write_bytes(b"v"))
+
+    def fake_timeline(text, out, cfg2, costs, *, duration, audio_path=None):
+        captured["duration"] = duration
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("1\n", encoding="utf-8")
+        return []
+
+    monkeypatch.setattr(service, "generate_subtitle_timeline", fake_timeline)
+    service.run_compose(cfg, project)
+    assert captured["duration"] == pytest.approx(4.0 + 5.0)
 
 
 def test_routing_default_and_override(client):

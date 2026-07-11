@@ -133,6 +133,32 @@ def normalize_clip(src: Path, out_path: Path, duration: float | None = None) -> 
     run([*args, str(out_path)])
 
 
+def extend_clip(src: Path, out_path: Path, extend_seconds: float = 5.0) -> None:
+    """dry-run 用延伸影片:把既有片段後方追加指定秒數的循環片段。
+
+    這不是品質導向的延伸,而是確保 Web / pipeline 的延伸資料流可離線測試。
+    live 模式由 Video Provider 的原生 extend API 負責。
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    ext = out_path.with_name(out_path.stem + "_extension.mp4")
+    run(
+        [
+            "-stream_loop", "-1",
+            "-i", str(src),
+            "-t", f"{max(0.1, extend_seconds):.3f}",
+            "-vf", f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,crop={WIDTH}:{HEIGHT},fps={FPS}",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-an",
+            str(ext),
+        ]
+    )
+    try:
+        concat_clips([src, ext], out_path)
+    finally:
+        ext.unlink(missing_ok=True)
+
+
 def concat_clips(clips: list[Path], out_path: Path) -> None:
     """把多個標準化後的片段硬串接成最終影片(Composition Engine 的核心)。"""
     if not clips:

@@ -15,6 +15,7 @@ from pathlib import Path
 from .. import ffmpeg
 from ..config import Config
 from ..models import CostEntry, Shot
+from ..pricing import provider_price
 from . import falai
 from .base import (
     VideoProvider,
@@ -22,6 +23,7 @@ from .base import (
     get_video_provider,
     register_video_provider,
 )
+from ..guardrails import check_budget, retry_call
 
 
 class _FalVideoProvider(VideoProvider):
@@ -46,25 +48,36 @@ class _FalVideoProvider(VideoProvider):
                 )
                 continue
 
+            unit_cost = provider_price("video", self.name) or self.unit_cost_usd
+            check_budget(cfg, costs, next_cost=unit_cost)
             if not cfg.fal_key:
                 raise RuntimeError("未設定 FAL_KEY(或改用 --dry-run)。")
             # fal.ai 需要可存取的圖片 URL;先上傳到 fal 儲存再餵給 image-to-video。
             image_url = _upload_image(req.image_path, cfg.fal_key)
-            result = falai.run_model(
-                cfg.fal_key,
-                endpoint=self.endpoint,
-                payload={
-                    "prompt": req.motion_hint or "",
-                    "image_url": image_url,
-                    "duration": str(int(round(req.duration))),
-                },
+            result = retry_call(
+                lambda: falai.run_model(
+                    cfg.fal_key,
+                    endpoint=self.endpoint,
+                    payload={
+                        "prompt": req.motion_hint or "",
+                        "image_url": image_url,
+                        "duration": str(int(round(req.duration))),
+                    },
+                ),
+                cfg,
+                label=f"{self.name} video generate",
             )
             raw = out.with_name(out.stem + "_raw.mp4")
-            falai.download(result["video"]["url"], raw, cfg.fal_key)
+            # 模型已跑完付費;下載單獨重試,暫時性失敗不用重跑整個生成
+            retry_call(
+                lambda: falai.download(result["video"]["url"], raw, cfg.fal_key),
+                cfg,
+                label=f"{self.name} video download",
+            )
             ffmpeg.normalize_clip(raw, out, duration=req.duration)  # 統一畫布/編碼,無縫串接
             raw.unlink(missing_ok=True)
             costs.append(
-                CostEntry("video", self.name, self.unit_cost_usd, f"分鏡{req.shot_index} 候選{variant}")
+                CostEntry("video", self.name, unit_cost, f"分鏡{req.shot_index} 候選{variant}")
             )
         return out_paths
 
@@ -128,3 +141,17 @@ def _upload_image(image_path: Path, fal_key: str) -> str:
         )
         resp.raise_for_status()
         return resp.json()["url"]
+
+
+def extend_clip_with_provider(
+    src_path: Path,
+    out_path: Path,
+    cfg: Config,
+    costs: list[CostEntry],
+    *,
+    extend_seconds: float = 5.0,
+) -> Path:
+    """統一入口:依 `cfg.video_provider` 延伸已選影片。"""
+    return get_video_provider(cfg.video_provider).extend(
+        src_path, out_path, cfg, costs, extend_seconds=extend_seconds
+    )

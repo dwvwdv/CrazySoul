@@ -9,7 +9,9 @@ from crazysoul.config import Config, _load_dotenv
 _ENV_KEYS = [
     "LLM_PROVIDER", "IMAGE_PROVIDER", "VIDEO_PROVIDER", "LLM_MODEL",
     "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "FAL_KEY",
+    "PCLOUD_WEBDAV_URL", "PCLOUD_USERNAME", "PCLOUD_PASSWORD", "PCLOUD_REMOTE_DIR",
     "COST_LIMIT_USD", "COST_RETRY_FACTOR", "DYNAMIC_RATIO",
+    "RETRY_MAX_ATTEMPTS", "RETRY_BACKOFF_SECONDS",
 ]
 
 
@@ -29,6 +31,7 @@ def test_load_defaults(monkeypatch):
     assert cfg.dry_run is False
     assert cfg.anthropic_api_key is None
     assert cfg.dynamic_ratio == 1.0
+    assert cfg.retry_max_attempts == 2
 
 
 def test_dynamic_ratio_clamped(monkeypatch):
@@ -46,10 +49,12 @@ def test_load_from_env(monkeypatch):
     monkeypatch.setenv("IMAGE_PROVIDER", "custom")
     monkeypatch.setenv("COST_LIMIT_USD", "2.5")
     monkeypatch.setenv("FAL_KEY", "k")
+    monkeypatch.setenv("PCLOUD_WEBDAV_URL", "https://webdav.example")
     cfg = Config.load(dotenv=None)
     assert cfg.image_provider == "custom"
     assert cfg.cost_limit_usd == 2.5
     assert cfg.fal_key == "k"
+    assert cfg.pcloud_webdav_url == "https://webdav.example"
 
 
 def test_bad_numeric_falls_back(monkeypatch):

@@ -47,11 +47,17 @@ class Config:
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     fal_key: str | None = None
+    pcloud_webdav_url: str | None = None
+    pcloud_username: str | None = None
+    pcloud_password: str | None = None
+    pcloud_remote_dir: str = "CrazySoul"
 
     # 成本護欄(Phase 7 完整實作,先放參數)
     cost_limit_usd: float = 0.0
     cost_retry_factor: float = 1.4
     tts_cost_usd: float = 0.0
+    retry_max_attempts: int = 2
+    retry_backoff_seconds: float = 0.5
 
     # Phase 1 Routing:動態分鏡比例上限([0,1])。
     # 1.0=所有 needs_motion 分鏡都走付費 Video Provider;
@@ -75,6 +81,12 @@ class Config:
             except ValueError:
                 return default
 
+        def _int(name: str, default: int) -> int:
+            try:
+                return int(os.environ.get(name, "") or default)
+            except ValueError:
+                return default
+
         # 動態比例夾在 [0,1],避免設定錯誤造成分流異常。
         dynamic_ratio = min(max(_num("DYNAMIC_RATIO", 1.0), 0.0), 1.0)
 
@@ -89,8 +101,14 @@ class Config:
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY") or None,
             openai_api_key=os.environ.get("OPENAI_API_KEY") or None,
             fal_key=os.environ.get("FAL_KEY") or None,
+            pcloud_webdav_url=os.environ.get("PCLOUD_WEBDAV_URL") or None,
+            pcloud_username=os.environ.get("PCLOUD_USERNAME") or None,
+            pcloud_password=os.environ.get("PCLOUD_PASSWORD") or None,
+            pcloud_remote_dir=os.environ.get("PCLOUD_REMOTE_DIR", "CrazySoul"),
             cost_limit_usd=_num("COST_LIMIT_USD", 0.0),
             cost_retry_factor=_num("COST_RETRY_FACTOR", 1.4),
             tts_cost_usd=_num("TTS_COST_USD", 0.0),
+            retry_max_attempts=max(1, _int("RETRY_MAX_ATTEMPTS", 2)),
+            retry_backoff_seconds=max(0.0, _num("RETRY_BACKOFF_SECONDS", 0.5)),
             dynamic_ratio=dynamic_ratio,
         )

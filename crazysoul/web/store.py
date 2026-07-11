@@ -46,6 +46,8 @@ class ShotState:
     selected_image: str | None = None   # candidate id
     video_candidates: list[Candidate] = field(default_factory=list)
     selected_video: str | None = None   # candidate id
+    extended_video: bool = False        # 是否已對選定影片做延伸
+    extend_seconds: float = 0.0         # 累計延伸秒數,合成字幕時長要加上
 
     def selected_image_cand(self) -> Candidate | None:
         return next((c for c in self.image_candidates if c.cid == self.selected_image), None)
@@ -64,6 +66,9 @@ class Project:
     shots: list[ShotState] = field(default_factory=list)
     characters: list[Character] = field(default_factory=list)  # Phase 2 角色庫
     costs: list[CostEntry] = field(default_factory=list)
+    background_music: str | None = None  # 專案內相對路徑
+    subtitle_text: str = ""             # 合成時要燒進影片的字幕文字
+    subtitles: str | None = None         # 專案內 SRT 相對路徑
     final_video: str | None = None      # /media URL
     saved_to_pcloud: bool = False
 
@@ -81,6 +86,11 @@ class Project:
             "num_shots": self.num_shots,
             "dynamic_ratio": self.dynamic_ratio,
             "title": self.title,
+            "background_music": (
+                f"/media/{self.pid}/{self.background_music}" if self.background_music else None
+            ),
+            "subtitle_text": self.subtitle_text,
+            "subtitles": (f"/media/{self.pid}/{self.subtitles}" if self.subtitles else None),
             "final_video": self.final_video,
             "saved_to_pcloud": self.saved_to_pcloud,
             "total_cost_usd": round(sum(c.unit_cost_usd for c in self.costs), 4),
@@ -111,6 +121,7 @@ class Project:
                         {"cid": c.cid, "url": c.url} for c in s.video_candidates
                     ],
                     "selected_video": s.selected_video,
+                    "extended_video": s.extended_video,
                 }
                 for s in self.shots
             ],
